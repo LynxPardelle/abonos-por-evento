@@ -1,0 +1,38 @@
+import { readFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { pathToFileURL } from 'node:url';
+import { createReconciliationService } from './application.mjs';
+import { MemoryReconciliationRepository } from './repository.mjs';
+import { createImportWorker } from './worker.mjs';
+export async function runSyntheticPilot() {
+  const started = performance.now();
+  const csv = await readFile(new URL('./fixtures/pilot.csv', import.meta.url), 'utf8');
+  const sha256 = createHash('sha256').update(csv).digest('hex');
+  const actor = { organizationId: 'synthetic-org', subject: 'synthetic-operator' };
+  const participants = [{ participantId: 'ana', name: 'Ana de prueba', reference: 'ANA', agreedMinor: '100000' }, { participantId: 'shared-a', reference: 'SHARED', agreedMinor: '10000' }, { participantId: 'shared-b', reference: 'SHARED', agreedMinor: '10000' }];
+  const service = createReconciliationService({ repository: new MemoryReconciliationRepository(), eventReader: async () => ({ event: { eventId: 'synthetic-event', currency: 'MXN' }, participants }), uploadSigner: async ({ key }) => ({ url: `https://uploads.invalid/${key}` }) });
+  const first = await service.startImport(actor, 'synthetic-event', { operationId: 'upload-first', fileName: 'pilot.csv', sha256 });
+  const duplicateUpload = await service.startImport(actor, 'synthetic-event', { operationId: 'upload-retry', fileName: 'pilot-retry.csv', sha256 });
+  if (first.batch.batchId !== duplicateUpload.batch.batchId) throw new Error('Duplicate upload created another batch');
+  const notification = { Records: [{ messageId: 'synthetic-sqs-message', body: JSON.stringify({ Records: [{ s3: { bucket: { name: 'synthetic-bucket' }, object: { key: first.batch.key } } }] }) }] };
+  let failOnce = true;
+  const worker = createImportWorker({ service, bucketName: 'synthetic-bucket', objectReader: async () => { if (failOnce) { failOnce = false; throw new Error('Synthetic transient S3 failure'); } return csv; } });
+  const failed = await worker(notification);
+  if (failed.batchItemFailures.length !== 1) throw new Error('Expected one retryable message');
+  const replay = await worker(notification);
+  if (replay.batchItemFailures.length) throw new Error('Queue replay failed');
+  const imported = (await service.getImport(actor, 'synthetic-event', sha256)).batch;
+  const firstPayment = await service.allocate(actor, 'synthetic-event', { operationId: 'allocation-first', batchId: sha256, rowId: '2', participantId: 'ana', expectedVersion: 0 });
+  await service.allocate(actor, 'synthetic-event', { operationId: 'allocation-second', batchId: sha256, rowId: '3', participantId: 'ana', expectedVersion: 1 });
+  await service.reverse(actor, 'synthetic-event', firstPayment.movement.movementId, { operationId: 'reversal-first', expectedVersion: 2 });
+  await worker(notification);
+  const duplicateCsv = 'provider,movement_id,participant_reference,amount,currency\nbank,synthetic-100,ANA,1000.00,MXN\n';
+  const duplicateHash = createHash('sha256').update(duplicateCsv).digest('hex');
+  await service.startImport(actor, 'synthetic-event', { operationId: 'upload-different-file', fileName: 'another.csv', sha256: duplicateHash });
+  const duplicateBatch = await service.processImport({ organizationId: actor.organizationId, eventId: 'synthetic-event', batchId: duplicateHash, csv: duplicateCsv });
+  const balances = await service.balances(actor, 'synthetic-event');
+  const ledger = await service.movements(actor, 'synthetic-event');
+  const paidMinor = balances.balances.find((balance) => balance.participantId === 'ana').paidMinor;
+  return { scenario: 'SaldoEvento synthetic close', currency: 'MXN', paidMinor, expectedPaidMinor: '75000', movementCount: ledger.movements.length, ambiguousRows: imported.rows.filter((row) => row.status === 'ambiguous').length, rejectedRows: imported.rows.filter((row) => row.status === 'rejected').length, duplicateRows: duplicateBatch.batch.rows.filter((row) => row.status === 'duplicate').length, retryCount: failed.batchItemFailures.length, discrepancies: paidMinor === '75000' ? [] : ['Balance mismatch'], durationMs: Math.round((performance.now() - started) * 100) / 100, persistence: 'memory; AWS queue replay simulated' };
+}
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) console.log(JSON.stringify(await runSyntheticPilot(), null, 2));

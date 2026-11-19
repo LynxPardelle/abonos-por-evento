@@ -1,9 +1,11 @@
-# Interfaz Angular de Abonos por Evento
+# Interfaz Angular de SaldoEvento
 
-Desde esta carpeta usa npm ci para instalar, npm start para arrancar el servidor local, npm run build para compilar y npm test -- --watch=false para verificar la ruta inicial.
+Angular 22.2.6, CLI/SSR 22.2.7 y NgRx Signals22.0.1. Componentes standalone, rutas lazy, Signal Forms y estado por ruta.
 
-La ruta inicial carga un workspace standalone de forma diferida. Su estado vive en un NgRx SignalStore con alcance de ruta. El [diseño de producto](../docs/PRODUCTO.md) describe los siguientes flujos.
+Desde la raíz del repositorio instala `npm --prefix web ci`. Ejecuta `npm run dev:api` en una terminal y `npm --prefix web start` en otra; abre http://localhost:4310. La API sintética de loopback 4311 entrega configuración local sin credenciales ni datos reales.
 
-## Dependencias de desarrollo
+`npm --prefix web test -- --watch=false` verifica la interfaz. `npm --prefix web run build` genera `dist/saldoevento-web/browser` y `server`. Desde la raíz, `npm run package:frontend` prepara el Lambda SSR y `npm run smoke:frontend` invoca el paquete real.
 
-La auditoría del 17 de noviembre de 2026 encontró avisos transitivos del toolchain de compilación y pruebas por picomatch 4.0.7. La auditoría de dependencias de producción no reportó avisos. Actualizar el lock cuando se publique una versión compatible corregida y repetir build, pruebas y ambas auditorías. [Aviso publicado](https://github.com/advisories/GHSA-fc5q-39xc-vjpf)
+En nube, el acceso es OAuth Code con PKCE; la configuración pública llega de `/runtime-config.json`. Los tokens permanecen en sesión del navegador y las operaciones de dinero se validan en el backend. El frontend SSR no recibe ni incorpora datos privados al HTML inicial.
+
+Consulta [Arquitectura](../docs/architecture/ARCHITECTURE.md), [Contrato](../docs/CONTRATO.md) y [Operación](../docs/OPERACION.md).

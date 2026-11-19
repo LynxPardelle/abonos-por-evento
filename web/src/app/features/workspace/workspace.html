@@ -1,18 +1,79 @@
-<main aria-labelledby="product-title">
-  <header>
-    <h1 id="product-title">{{ store.title() }}</h1>
-    <p>{{ store.description() }}</p>
-  </header>
-
-  <section aria-labelledby="planned-areas">
-    <h2 id="planned-areas">Flujos previstos</h2>
-    <ul>
-      @for (area of store.areas(); track area.id) {
-        <li>
-          <h3>{{ area.label }}</h3>
-          <p>{{ area.description }}</p>
-        </li>
+<a class="skip" href="#workspace">Ir al contenido</a>
+<header class="topbar">
+  <a routerLink="/" class="brand" aria-label="SaldoEvento, inicio"><span class="brand-mark" aria-hidden="true">s<span>e</span></span>SaldoEvento<span class="brand-dot">.</span></a>
+  <div class="topbar-meta"><span class="quiet">Cada abono en su lugar</span>
+    @if (session.local()) { <span class="local-label">Prueba local · datos sintéticos</span> }
+    @if (session.authenticated() && !session.local()) { <button class="text-button" (click)="session.signOut()">Cerrar sesión</button> }
+  </div>
+</header>
+<div class="layout">
+  <aside class="sidebar">
+    <p class="eyebrow">ESPACIO DE TRABAJO</p>
+    <nav aria-label="Navegación principal">
+      <a routerLink="/app" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }"><span aria-hidden="true">▦</span> Mis eventos</a>
+      @if (store.eventId()) {
+        <div class="event-nav"><p>{{ store.event()?.name ?? 'Evento' }}</p>
+          <a [routerLink]="['/eventos', store.eventId(), 'asistentes']" routerLinkActive="active">Participantes y saldos</a>
+          <a [routerLink]="['/eventos', store.eventId(), 'importaciones']" routerLinkActive="active">Importaciones</a>
+          <a [routerLink]="['/eventos', store.eventId(), 'movimientos']" routerLinkActive="active">Movimientos</a>
+        </div>
       }
-    </ul>
-  </section>
-</main>
+    </nav>
+    <div class="sidebar-note"><span class="tiny-dot" aria-hidden="true"></span> Confirmación humana<p>Los movimientos importados se aplican después de tu revisión.</p></div>
+    <p class="sidebar-footer">Un producto de Lynx Pardelle</p>
+  </aside>
+  <main id="workspace" [attr.aria-busy]="store.busy()">
+    <div class="page-heading"><div><p class="eyebrow">{{ store.event()?.name ?? 'ORGANIZA TU PRÓXIMO CIERRE' }}</p><h1>{{ title() }}</h1></div>
+      @if (session.authenticated()) { <button class="secondary small" [disabled]="store.busy()" (click)="store.refresh()">↻ Actualizar</button> }
+    </div>
+    @if (store.error() || localError() || session.message()) { <p class="message error" role="alert">{{ store.error() || localError() || session.message() }}</p> }
+    @if (store.notice()) { <p class="message success" role="status">{{ store.notice() }}</p> }
+    @if (!session.ready()) {
+      <div class="empty"><span class="loading-line"></span><p>Preparando tu espacio…</p></div>
+    } @else if (!session.authenticated()) {
+      <section class="welcome"><p class="eyebrow">UN CIERRE CLARO, DE PRINCIPIO A FIN</p><h2>Del movimiento<br>al saldo correcto.</h2><p>Importa tus pagos, revisa las coincidencias y conserva el historial de cada participante.</p><button (click)="session.signIn()">Entrar a mi espacio <span aria-hidden="true">↗</span></button><div class="workflow"><span>01 Importa</span><span>02 Revisa</span><span>03 Confirma</span></div></section>
+    } @else if (section() === 'events') {
+      <div class="section-lead"><p>Eventos, participantes y pagos externos. Todo listo para revisar.</p><span class="count">{{ store.events().length }} eventos</span></div>
+      <div class="event-list">
+        @for (event of store.events(); track event.eventId) {
+          <a class="event-row" [routerLink]="['/eventos', event.eventId, 'asistentes']"><span class="event-icon" aria-hidden="true">{{ event.name.slice(0, 1).toUpperCase() }}</span><span><strong>{{ event.name }}</strong><small>Moneda del evento · {{ event.currency }}</small></span><span class="row-action">Abrir evento ↗</span></a>
+        } @empty { <div class="empty"><h2>Tu primer evento empieza aquí.</h2><p>Registra el evento y sus participantes antes de importar los pagos.</p></div> }
+      </div>
+      <section class="form-section"><div><p class="eyebrow">SIGUIENTE PASO</p><h2>Crear un evento</h2><p>Una moneda para todos sus movimientos.</p></div>
+        <form (submit)="createEvent($event)" class="inline-form"><label>Nombre del evento<input [formField]="eventForm.name" placeholder="Ej. Encuentro de noviembre" autocomplete="off"></label><label>Moneda<select [formField]="eventForm.currency"><option value="MXN">MXN · Peso mexicano</option><option value="USD">USD · Dólar</option><option value="EUR">EUR · Euro</option></select></label><button type="submit" [disabled]="store.busy() || eventForm().invalid()">Crear evento ↗</button></form>
+      </section>
+    } @else {
+      <div class="summary-strip"><div><span>Confirmado</span><strong>{{ format(store.paidMinor(), store.event()?.currency) }}</strong></div><div><span>Pendiente por cubrir</span><strong>{{ format(store.pendingMinor(), store.event()?.currency) }}</strong></div><div><span>Participantes</span><strong>{{ store.participants().length.toString().padStart(2, '0') }}</strong></div></div>
+      @if (section() === 'participants') {
+        <div class="section-lead"><h2>Un saldo por participante</h2><a [routerLink]="['/eventos', store.eventId(), 'importaciones']">Ir a importaciones ↗</a></div>
+        <div class="table-wrap"><table><caption class="sr-only">Saldos del evento</caption><thead><tr><th>Participante / referencia</th><th class="numeric">Acordado</th><th class="numeric">Confirmado</th><th class="numeric">Por cubrir</th></tr></thead><tbody>
+          @for (person of store.participants(); track person.participantId) { <tr><td><strong>{{ person.name }}</strong><small>{{ person.reference }}</small></td><td class="numeric">{{ format(person.agreedMinor, store.event()?.currency) }}</td><td class="numeric">@for (balance of store.balances(); track balance.participantId) { @if (balance.participantId === person.participantId) { {{ format(balance.paidMinor, balance.currency) }} } }</td><td class="numeric">@for (balance of store.balances(); track balance.participantId) { @if (balance.participantId === person.participantId) { {{ format(balance.pendingMinor, balance.currency) }} } }</td></tr> }
+          @empty { <tr><td colspan="4" class="empty-cell">Agrega a los participantes para empezar.</td></tr> }
+        </tbody></table></div>
+        <section class="form-section"><div><p class="eyebrow">LISTA DEL EVENTO</p><h2>Agregar participante</h2><p>La referencia ayuda a encontrar sus pagos.</p></div><form (submit)="addParticipant($event)" class="inline-form participant-form"><label>Nombre<input [formField]="participantForm.name" autocomplete="off" placeholder="Nombre completo"></label><label>Referencia<input [formField]="participantForm.reference" autocomplete="off" placeholder="Ej. ANA-01"></label><label>Importe acordado<input [formField]="participantForm.agreed" inputmode="decimal" placeholder="1000.00"></label><button type="submit" [disabled]="store.busy() || participantForm().invalid()">Agregar participante</button></form></section>
+      } @else if (section() === 'imports') {
+        <section class="upload-section"><div><p class="eyebrow">01 / IMPORTAR</p><h2>Un archivo. Cada pago a revisión.</h2><p>CSV de hasta 1 MB. Reenviar el mismo archivo conserva un solo lote.</p><a href="/ejemplo-importacion.csv" download>Descargar CSV de ejemplo ↓</a></div><form (submit)="upload($event)"><label class="file-label">Archivo de movimientos<input type="file" accept=".csv,text/csv" (change)="chooseFile($event)"></label><button type="submit" [disabled]="!selectedFile() || store.busy()">Importar y revisar ↗</button></form></section>
+        <div class="section-lead"><h2>Lotes de importación</h2><span class="count">{{ store.batches().length }} lotes</span></div>
+        <div class="batch-list">@for (batch of store.batches(); track batch.batchId) { <button class="batch-row" [class.selected]="store.selectedBatch()?.batchId === batch.batchId" (click)="store.selectBatch(batch.batchId)"><span><strong>{{ batch.fileName }}</strong><small>{{ batch.batchId.slice(0, 12) }}</small></span><span class="status-tag">{{ status(batch.status) }}</span><span aria-hidden="true">↗</span></button> } @empty { <p class="empty-cell">Todavía no hay archivos importados.</p> }</div>
+        @if (store.selectedBatch(); as batch) {
+          @if (batch.error) { <p class="message error" role="alert">{{ batch.error }} Corrige el archivo y vuelve a importarlo.</p> }<div class="section-lead review-heading"><div><p class="eyebrow">02 / REVISAR</p><h2>{{ batch.fileName }}</h2></div><span class="status-tag">{{ status(batch.status) }}</span></div>
+          <div class="table-wrap"><table><caption class="sr-only">Movimientos del archivo</caption><thead><tr><th>Referencia / evidencia</th><th class="numeric">Importe</th><th>Revisión</th><th><span class="sr-only">Acción</span></th></tr></thead><tbody>
+            @for (row of batch.rows ?? []; track row.rowId) { <tr><td><strong>{{ row.participantReference ?? row.reference ?? 'Sin referencia' }}</strong><small>{{ row.reason ?? row.evidence ?? 'Revisar referencia y participante' }}</small></td><td class="numeric">{{ format(row.amountMinor, row.currency) }}</td><td><span class="status-tag">{{ status(row.status) }}</span></td><td class="numeric">@if (!['rejected', 'duplicate', 'confirmed', 'allocated', 'applied'].includes(row.status.toLowerCase())) { <button class="secondary small" [disabled]="store.busy()" (click)="openReview(batch.batchId, row)">Revisar abono</button> }</td></tr> }
+            @empty { <tr><td colspan="4" class="empty-cell">{{ batch.status === 'failed' ? 'Este archivo no se pudo procesar. Revisa la causa indicada y corrige el CSV.' : 'El lote aún no tiene filas disponibles. Actualiza para consultar su progreso.' }}</td></tr> }
+          </tbody></table></div>
+        }
+      } @else if (section() === 'movements') {
+        <div class="section-lead"><div><h2>Historial confirmado</h2><p>Los reversos conservan el abono original.</p></div><button class="secondary small" (click)="openManual()" [disabled]="store.busy()">Registrar abono manual</button></div>
+        <div class="table-wrap"><table><caption class="sr-only">Libro de movimientos</caption><thead><tr><th>Participante / movimiento</th><th>Tipo</th><th class="numeric">Importe</th><th><span class="sr-only">Acción</span></th></tr></thead><tbody>
+          @for (movement of store.movements(); track movement.movementId) { <tr><td><strong>{{ participantName(movement.participantId) }}</strong><small>{{ movement.movementId }}</small></td><td>{{ movement.kind === 'reversal' ? 'Reverso' : 'Abono' }}</td><td class="numeric">{{ format(movement.amountMinor, movement.currency) }}</td><td class="numeric">@if (canReverse(movement)) { <button class="text-button" [disabled]="store.busy()" (click)="openReversal(movement)">Reversar</button> }</td></tr> }
+          @empty { <tr><td colspan="4" class="empty-cell">Los abonos aparecerán aquí después de confirmarlos.</td></tr> }
+        </tbody></table></div>
+      }
+    }
+    <footer class="page-footer"><span>SaldoEvento</span><span>Pagos externos. Saldos trazables.</span></footer>
+  </main>
+</div>
+<dialog #confirmDialog aria-labelledby="confirm-title"><form (submit)="confirm($event)"><p class="eyebrow">03 / CONFIRMAR</p><h2 id="confirm-title">Revisa este abono</h2>@if (review(); as selection) { <p class="dialog-amount">{{ format(selection.row.amountMinor, selection.row.currency) }}</p><p>Referencia: <strong>{{ selection.row.participantReference ?? selection.row.reference }}</strong></p><label>Asignar al participante<select [formField]="confirmationForm.participantId"><option value="">Selecciona un participante</option>@for (person of store.participants(); track person.participantId) { <option [value]="person.participantId">{{ person.name }} · {{ person.reference }}</option> }</select></label><label class="checkbox-label"><input type="checkbox" [formField]="confirmationForm.acknowledged">Revisé la referencia y confirmo que este pago corresponde al participante.</label> }@if (store.error()) { <p role="alert" class="message error">{{ store.error() }}</p> }<div class="dialog-actions"><button type="button" class="secondary" (click)="confirmDialog.close()">Cancelar</button><button type="submit" [disabled]="store.busy() || !confirmationModel().acknowledged || !confirmationModel().participantId">Confirmar abono</button></div></form></dialog>
+<dialog #reversalDialog aria-labelledby="reversal-title"><p class="eyebrow">CORREGIR CON HISTORIAL</p><h2 id="reversal-title">¿Reversar este abono?</h2>@if (reversing(); as movement) { <p class="dialog-amount">{{ format(movement.amountMinor, movement.currency) }}</p><p>Se ajustará el saldo de {{ participantName(movement.participantId) }}. El movimiento original seguirá visible.</p> }@if (store.error()) { <p role="alert" class="message error">{{ store.error() }}</p> }<div class="dialog-actions"><button class="secondary" (click)="reversalDialog.close()">Cancelar</button><button [disabled]="store.busy()" (click)="reverse()">Confirmar reverso</button></div></dialog>
+
+<dialog #manualDialog aria-labelledby="manual-title"><form (submit)="saveManual($event)"><p class="eyebrow">PAGO EXTERNO</p><h2 id="manual-title">Registrar abono manual</h2><label>Participante<select [formField]="manualForm.participantId"><option value="">Selecciona un participante</option>@for (person of store.participants(); track person.participantId) { <option [value]="person.participantId">{{ person.name }} · {{ person.reference }}</option> }</select></label><label>Referencia única del comprobante<input [formField]="manualForm.reference" placeholder="Ej. RECIBO-001"></label><label>Importe en {{ store.event()?.currency }}<input [formField]="manualForm.amount" placeholder="500.00" inputmode="decimal"></label><label class="checkbox-label"><input type="checkbox" [formField]="manualForm.acknowledged">Verifiqué el comprobante y confirmo el participante y el importe.</label>@if (localError() || store.error()) { <p class="message error" role="alert">{{ localError() || store.error() }}</p> }<div class="dialog-actions"><button type="button" class="secondary" (click)="manualDialog.close()">Cancelar</button><button type="submit" [disabled]="store.busy() || manualForm().invalid() || !manualModel().acknowledged">Confirmar abono manual</button></div></form></dialog>

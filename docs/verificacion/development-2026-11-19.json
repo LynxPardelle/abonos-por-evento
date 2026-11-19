@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 1,
+  "product": "SaldoEvento",
+  "environment": "development",
+  "stack": "saldoevento-dev",
+  "region": "us-east-1",
+  "origin": "https://saldoevento-dev.lynxpardelle.com",
+  "startedAt": "2026-11-19T19:20:41.486Z",
+  "status": "passed",
+  "checks": [
+    {
+      "name": "temporary_identities",
+      "status": "passed",
+      "evidence": {
+        "count": 3,
+        "notificationsSuppressed": true
+      }
+    },
+    {
+      "name": "cloud_frontend",
+      "status": "passed"
+    },
+    {
+      "name": "unauthenticated_rejected",
+      "status": "passed"
+    },
+    {
+      "name": "event_and_participants",
+      "status": "passed",
+      "evidence": {
+        "participants": 3
+      }
+    },
+    {
+      "name": "tenant_isolation",
+      "status": "passed"
+    },
+    {
+      "name": "csv_upload_and_worker",
+      "status": "passed",
+      "evidence": {
+        "bytes": 324,
+        "rows": 4,
+        "polls": 11
+      }
+    },
+    {
+      "name": "importer_cannot_confirm",
+      "status": "passed"
+    },
+    {
+      "name": "explicit_confirmations_and_idempotency",
+      "status": "passed"
+    },
+    {
+      "name": "reversal_preserves_history",
+      "status": "passed"
+    },
+    {
+      "name": "repeated_file_is_one_batch",
+      "status": "passed"
+    },
+    {
+      "name": "final_balance_and_movements",
+      "status": "passed",
+      "evidence": {
+        "paidMinor": "75000",
+        "movements": 3
+      }
+    },
+    {
+      "name": "temporary_identity_cleanup",
+      "status": "passed",
+      "evidence": {
+        "deletedUsers": 3
+      }
+    }
+  ],
+  "metrics": {
+    "currency": "MXN",
+    "paidMinor": "75000",
+    "movements": 3,
+    "ledgerVersion": 3,
+    "batches": 1,
+    "participants": 3
+  },
+  "synthetic": {
+    "runId": "fae4d0f0c46643d9",
+    "eventId": "smoke-fae4d0f0c46643d9",
+    "organizationA": "smoke-a-fae4d0f0c46643d9",
+    "organizationB": "smoke-b-fae4d0f0c46643d9"
+  },
+  "cleanup": {
+    "attemptedUsers": 3,
+    "createdUsers": 3,
+    "deletedUsers": 3,
+    "failures": 0
+  },
+  "completedAt": "2026-11-19T19:21:21.464Z",
+  "deployment": {
+    "sourceCommit": "6ae2927b4af6d6a1ac12f581400ead049441f3ca",
+    "sourceBranch": "feature/saldoevento-v1",
+    "stackStatus": "CREATE_COMPLETE",
+    "changeSet": "saldoevento-dev-v2",
+    "nodeTests": 69,
+    "angularTests": 7
+  },
+  "additionalChecks": {
+    "actualAwsSsrStatus": 200,
+    "s3BrowserPreflightStatus": 200,
+    "publicBrowserRender": "passed",
+    "hostedUiPkceForm": "passed",
+    "fullHumanSignIn": "pending",
+    "usersAfterSmoke": 0,
+    "actualDlqExhaustion": "not exercised; failure/replay simulated locally"
+  }
+}
