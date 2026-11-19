@@ -1,0 +1,23 @@
+{
+  "name": "saldoevento",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.15.0 <25"
+  },
+  "scripts": {
+    "test": "node --test",
+    "test:services": "node --test services/**/*.test.mjs",
+    "test:web": "npm --prefix web test -- --watch=false",
+    "build:web": "npm --prefix web run build",
+    "package:frontend": "node scripts/package-frontend.mjs",
+    "smoke:frontend": "node scripts/smoke-frontend.mjs",
+    "validate:infra": "node scripts/validate-infra.mjs",
+    "dev:api": "node scripts/local-api.mjs"
+  },
+  "devDependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.1172.0",
+    "yaml": "^2.8.1"
+  }
+}

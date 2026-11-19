@@ -1,87 +1,113 @@
 ---
-goal: Primera versión de Abonos por Evento
-version: '1.0'
+goal: Primera versión de SaldoEvento en microservicios AWS con Angular Lambda
+version: '2.0'
 date_created: 2026-11-17
-status: 'Planned'
-tags: [feature, architecture]
+last_updated: 2026-11-19
+status: 'In progress'
+tags: [feature, architecture, serverless, angular]
 ---
 
 # Introduction
 
-Estado **Planned**. Este plan convierte el esqueleto en el flujo de conciliación de pagos externos, abonos y saldos por participante. Las fases se ejecutan en orden.
+Estado **In progress**. El producto adopta SaldoEvento y una arquitectura de microservicios serverless con Angular SSR servido por Lambda. Las implementaciones locales tienen pruebas; las validaciones AWS y la aceptación de un organizador se registran separadamente. La promoción es **development → testing → main**.
 
 ## 1. Requirements & Constraints
 
-- **REQ-001** El piloto completa el flujo descrito en [Producto](../docs/PRODUCTO.md).
-- **SEC-001** Cada operación de negocio valida identidad, organización y acceso al recurso. Los ejemplos del repositorio usan datos sintéticos.
-- **CON-001** Las escrituras repetidas conservan el resultado original o devuelven conflicto cuando cambia la solicitud.
-- **PAT-001** El frontend usa componentes standalone, rutas lazy y SignalStore por flujo. El cómputo del backend se cobra por uso.
+- **REQ-001** Crear evento y participantes; importar CSV; revisar evidencia; confirmar abonos; consultar saldos; reversar conservando el original. Admitir también abono manual con comprobante de referencia única.
+- **REQ-002** Usar la marca SaldoEvento y los subdominios saldoevento-dev, saldoevento-test y saldoevento bajo lynxpardelle.com.
+- **SEC-001** HTTP API verifica JWT Cognito; los servicios comprueban identidad, organización y rol. El cliente no puede modificar organización ni roles. El dominio Eventos posee una tabla y Conciliación otra.
+- **SEC-002** S3 privado cifrado, URL PUT con checksum esperado, SQS con DLQ y fallos parciales. No registrar tokens, referencias completas ni CSV en logs.
+- **CON-001** Importes enteros transmitidos como cadenas; una moneda por evento (MXN/USD/EUR). Reintentos conservan el resultado o devuelven conflicto si cambia la solicitud. Las escrituras concurrentes usan versión.
+- **CON-002** Los ejemplos y los pilotos automáticos usan datos sintéticos. La aceptación con datos de un organizador requiere su escenario autorizado.
+- **PAT-001** Angular standalone, rutas lazy, Signal Forms y SignalStore por flujo. Frontend SSR/Express en Lambda, Function URL IAM y CloudFront OAC; assets S3 privado y API sin caché.
+- **PAT-002** Desarrollo sigue development, pruebas testing y producción main. La implementación se prepara en una rama feature basada en development y no cambia la rama main del checkout original.
 
 ## 2. Implementation Steps
 
 ### Implementation Phase 1
 
-**GOAL-001** Libro de movimientos
+**GOAL-001** Marca, contratos y arquitectura explícita.
 
 | Task | Description | Completed | Date |
 | --- | --- | --- | --- |
-| TASK-001 | Crear services/reconciliation/domain/ledger.mjs con abono y reverso como operaciones puras de importes enteros y una sola moneda por evento. Usar identificadores de rubro y operación. Verificación. Las pruebas sintéticas verifican saldo, reverso, duplicados y desfase de moneda. | Pendiente | |
+| TASK-005 | Adoptar SaldoEvento en README, producto, interfaz, paquetes y recursos nuevos; documentar criterio de nombre y conservar la ubicación histórica del repositorio. | Implementado | 2026-11-19 |
+| TASK-006 | Definir servicios Eventos/Conciliación y worker; Angular SSR Lambda detrás de CloudFront; S3 de assets; dominios por Stage; zona/certificado parametrizados. Crear docs/architecture/2026-11-19-saldoevento-design.md y actualizar ARCHITECTURE.md/diagram.mmd/ADR. | Implementado y validado localmente | 2026-11-19 |
 
 ### Implementation Phase 2
 
-**GOAL-002** Importación y permisos
+**GOAL-002** Libro de movimientos exacto y persistente.
 
 | Task | Description | Completed | Date |
 | --- | --- | --- | --- |
-| TASK-002 | Agregar servicios services/events y services/reconciliation al template. Configurar HTTP API JWT, S3 privado con caducidad, SQS con DLQ y DynamoDB bajo demanda. Persistir estados de batch y huella del archivo antes de producir sugerencias. Verificación. El mismo archivo reenviado registra un batch lógico. Las filas rechazadas quedan visibles y dos organizaciones no pueden acceder a los mismos datos. | Pendiente | |
+| TASK-001 | Crear services/reconciliation/domain/ledger.mjs con abono/reverso puros, enteros BigInt, moneda única, IDs de operación/rubro, idempotencia, duplicados y versión. Persistir movimiento, metadata, proyección y fila de batch en transacción DynamoDB; cada movimiento tiene ítem propio. Probar saldo/reverso/duplicados/moneda/OCC y adaptador inyectado. | Implementado y probado localmente | 2026-11-19 |
 
 ### Implementation Phase 3
 
-**GOAL-003** Revisión Angular
+**GOAL-003** Importación y permisos en microservicios.
 
 | Task | Description | Completed | Date |
 | --- | --- | --- | --- |
-| TASK-003 | Agregar rutas y SignalStores de importación y asistentes bajo web/src/app/features. Presentar evidencia de coincidencia y pedir confirmación antes de aplicar. Consultar progreso por batch. Verificación. La vista conserva pendientes en recarga. El cierre de prueba reconstruye el saldo desde los movimientos confirmados. | Pendiente | |
+| TASK-002 | Implementar services/events, services/shared y servicios/worker de Conciliación, autenticación/roles, hash de archivo, CSV y sugerencias persistidas. Declarar JWT, Cognito, S3 privado con caducidad, SQS/DLQ y tablas separadas en infra/template.yaml. Probar aislamiento, filas rechazadas, reenvío y replay. | Implementado; pruebas locales aprobadas; smoke AWS se registra en TASK-008 | 2026-11-19 |
+| TASK-007 | Exponer registro manual autenticado POST payments con participante, referencia, importe y versión; impedir referencias duplicadas y confirmar permiso confirmer/operator/admin. | Implementado y probado localmente | 2026-11-19 |
 
 ### Implementation Phase 4
 
-**GOAL-004** Piloto de conciliación
+**GOAL-004** Frontend operativo y empaquetado Lambda.
 
 | Task | Description | Completed | Date |
 | --- | --- | --- | --- |
-| TASK-004 | Preparar CSV sintético con abonos parciales, una referencia ambigua y un reverso. Ejecutar un cierre y simular reenvío y replay de DLQ con datos autorizados del piloto. Verificación. El total conciliado coincide con el escenario. Se registran discrepancias, tiempo de cierre y manuales de operación. | Pendiente | |
+| TASK-003 | Implementar rutas de eventos, participantes/saldos, importaciones y movimientos en web/src/app/features/workspace; SignalStore por ruta, servicios HTTP y acceso PKCE. Mostrar evidencia, confirmación explícita, errores de lote y progreso; recargar desde backend sin aplicar sugerencias automáticamente. | Implementado; recorrido navegador verificado | 2026-11-19 |
+| TASK-010 | Construir SSR, empaquetar artifacts/frontend con serverless-http y manifiesto con hashes, probar el handler Lambda real y validar host/caché. Añadir CI sin despliegue automático. | Implementado; verificación final en curso | 2026-11-19 |
+
+### Implementation Phase 5
+
+**GOAL-005** Piloto y desarrollo AWS.
+
+| Task | Description | Completed | Date |
+| --- | --- | --- | --- |
+| TASK-004 | Ejecutar services/reconciliation/pilot.mjs con CSV sintético: dos abonos, reverso, referencia ambigua, fila rechazada, duplicado y fallo/replay simulado. Esperar 75000 unidades menores MXN y cero discrepancias; ejecutar también el recorrido HTTP local y navegador con recarga. | Piloto sintético local aprobado | 2026-11-19 |
+| TASK-008 | Revisar y ejecutar change set nuevo saldoevento-dev mediante Deploy-Development.ps1; publicar assets; ejecutar smoke-cloud.mjs con usuarios temporales sintéticos y correos suprimidos. Verificar Cognito/JWT, IAM, DynamoDB, S3 checksum, SQS, ledger, tenant y roles. Guardar sólo reporte sanitizado bajo artifacts/deployments/dev. | En curso; no declarar aprobado sin reporte cloud | |
+| TASK-009 | Provisionar usuario real/organización, ejecutar escenario autorizado del organizador, revisar cierre/métricas/alertas y promover PR development → testing → main. Publicar saldoevento.lynxpardelle.com después de verificación de testing. | Pendiente | |
 
 ## 3. Alternatives
 
-- **ALT-001** Contenedor siempre activo. Reservarlo para procesamiento que requiera recursos sostenidos durante la jornada.
-- **ALT-002** Orquestación de cada operación con Step Functions. Usarla cuando el historial de etapas y la recuperación independiente aporten valor a un proceso largo.
+- **ALT-001** SPA sólo S3: menor complejidad, pero no cumple el frontend mediante Lambda solicitado.
+- **ALT-002** Contenedor permanente: reservar para carga sostenida o bibliotecas pesadas.
+- **ALT-003** Step Functions por batch: reservar para varias etapas con historial y recuperación independientes.
 
 ## 4. Dependencies
 
-- **DEP-001** Angular y NgRx Signals según el lock de `web/`.
-- **DEP-002** Node.js 24, AWS SAM, API Gateway y DynamoDB bajo demanda para los servicios del piloto.
+- **DEP-001** Node.js 24, Angular Core 22.2.6, CLI/SSR 22.2.7 y NgRx Signals 22.0.1; dependencias reproducibles en tres lockfiles.
+- **DEP-002** AWS SAM/CloudFormation, HTTP API, Cognito, Lambda, DynamoDB bajo demanda, S3, SQS y CloudFront.
+- **DEP-003** Zona pública lynxpardelle.com y certificado wildcard ACM us-east-1 verificados el 19 de noviembre de 2026; parámetros públicos por ambiente en infra/environments.
 
 ## 5. Files
 
-- **FILE-001** `infra/template.yaml` incorpora rutas autorizadas y tablas por servicio.
-- **FILE-002** `services/` contiene dominios y adaptadores Lambda, con pruebas de operaciones e idempotencia.
-- **FILE-003** `web/src/app/features/` contiene rutas, estado y pantallas de cada flujo.
+- **FILE-001** infra/template.yaml y infra/artifacts.yaml; parámetros en infra/environments.
+- **FILE-002** services/events, services/reconciliation y services/shared; pruebas y fixture sintéticos.
+- **FILE-003** web/src/app/core, features/workspace, server.ts, main.server.ts y configuración SSR.
+- **FILE-004** scripts/package-frontend.mjs, validate-infra.mjs, local-api.mjs, smoke-frontend.mjs, smoke-cloud.mjs y Deploy-Development.ps1.
+- **FILE-005** docs/CONTRATO.md, OPERACION.md y VERIFICACION.md; workflow CI y controles de promoción existentes.
 
 ## 6. Testing
 
-- **TEST-001** Pruebas unitarias de reglas, invariantes monetarias e idempotencia con fixtures sintéticos.
-- **TEST-002** Pruebas de integración de segregación por organización, datos y operación de extremo a extremo en entorno de pruebas.
-- **TEST-003** Verificación de compilación y pruebas Angular, `node --test` de handlers y lint de SAM.
+- **TEST-001** npm test: reglas, auth, repositorios, worker, contratos, piloto, API local e infraestructura.
+- **TEST-002** npm run test:web: dinero exacto, estado Angular, errores y sesión. Recorrido navegador confirma que un abono requiere revisión y el saldo persiste tras recarga del cliente.
+- **TEST-003** npm run build:web; package:frontend; smoke:frontend; validate:infra; cfn-lint de ambos templates.
+- **TEST-004** Smoke AWS development debe acreditar configuración, HTML, autenticación y datos reales de servicios con registros exclusivamente sintéticos. Distinguir fallo/replay simulado de prueba de DLQ real.
 
 ## 7. Risks & Assumptions
 
-- **RISK-001** Errores de importe o repetición. Verificar operaciones con aritmética entera, validación de moneda y escrituras condicionales.
-- **ASSUMPTION-001** Cada organización piloto aporta un escenario y datos de prueba autorizados. El despliegue y la operación se revisan después de comprobar el flujo local.
+- **RISK-001** Límite del piloto: CSV1MiB/500filas y batch serializado300000bytes. Un lote mayor debe dividirse; los errores quedan visibles.
+- **RISK-002** Consultas de ledger y participantes cargan el conjunto del evento en memoria; una escala superior al piloto requiere paginación pública y proyecciones de consulta más específicas.
+- **RISK-003** La marca se eligió con búsqueda pública editorial; no se afirma exclusividad registral. El repositorio remoto conserva su nombre técnico histórico.
+- **ASSUMPTION-001** Un organizador aportará un escenario y datos autorizados para aceptación. El piloto sintético y un despliegue dev no sustituyen esa aceptación.
+- **ASSUMPTION-002** Los cambios en producción siguen la promoción por ramas y no forman parte de una publicación directa desde feature.
 
 ## 8. Related Specifications / Further Reading
 
 - [Producto](../docs/PRODUCTO.md)
 - [Arquitectura](../docs/architecture/ARCHITECTURE.md)
-- [Lambda con Amazon SQS](https://docs.aws.amazon.com/lambda/latest/dg/with-sqs.html)
-- [Transacciones DynamoDB](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/transactions.html)
-- [Flujos de AWS Step Functions](https://docs.aws.amazon.com/step-functions/latest/dg/choosing-workflow-type.html)
+- [Contrato](../docs/CONTRATO.md)
+- [Operación](../docs/OPERACION.md)
+- [Decisión de diseño](../docs/architecture/2026-11-19-saldoevento-design.md)

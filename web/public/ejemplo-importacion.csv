@@ -1,0 +1,4 @@
+provider,movement_id,participant_reference,amount,currency
+transferencia,ejemplo-001,ANA-01,500.00,MXN
+transferencia,ejemplo-002,BRUNO-02,750.00,MXN
+transferencia,ejemplo-003,SIN-REFERENCIA,250.00,MXN
