@@ -1,0 +1,22 @@
+[
+  {
+    "ParameterKey": "Stage",
+    "ParameterValue": "prod"
+  },
+  {
+    "ParameterKey": "CertificateArn",
+    "ParameterValue": "arn:aws:acm:us-east-1:765932874577:certificate/4b008cec-97a6-447e-bf2f-9165e435b363"
+  },
+  {
+    "ParameterKey": "HostedZoneId",
+    "ParameterValue": "Z05088763QG63CC5SE7PN"
+  },
+  {
+    "ParameterKey": "PublicOrigin",
+    "ParameterValue": "https://saldoevento.lynxpardelle.com"
+  },
+  {
+    "ParameterKey": "SelfRegistrationEnabled",
+    "ParameterValue": "false"
+  }
+]

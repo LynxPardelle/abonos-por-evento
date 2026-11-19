@@ -1,45 +1,1253 @@
-AWSTemplateFormatVersion: '2010-09-09'
+AWSTemplateFormatVersion: 2010-09-09
 Transform: AWS::Serverless-2016-10-31
-Description: Base de AWS Lambda para Abonos por Evento.
-
+Description: SaldoEvento - microservicios serverless y Angular SSR sobre AWS Lambda.
 Parameters:
   Stage:
     Type: String
     Default: dev
-    AllowedValues: [dev, test, prod]
-
+    AllowedValues:
+      - dev
+      - test
+      - prod
+  CertificateArn:
+    Type: String
+    Default: ""
+    AllowedPattern: ^$|^arn:aws:acm:us-east-1:[0-9]{12}:certificate/[a-f0-9-]+$
+    Description: Certificado ACM us-east-1. Vacio permite construir sin dominio propio.
+  HostedZoneId:
+    Type: String
+    Default: ""
+    AllowedPattern: ^$|^Z[A-Z0-9]+$
+  PublicOrigin:
+    Type: String
+    Default: ""
+    AllowedPattern: ^$|^https://[a-z0-9][a-z0-9.-]*[a-z0-9]$
+    Description: Origen HTTPS sin slash. Vacio usa dominio de producto del ambiente.
+  SelfRegistrationEnabled:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: Habilita el alta con correo verificado y una organizacion propia. Mantener false en produccion hasta aprobar su lanzamiento.
+Mappings:
+  Environments:
+    dev:
+      DomainName: saldoevento-dev.lynxpardelle.com
+    test:
+      DomainName: saldoevento-test.lynxpardelle.com
+    prod:
+      DomainName: saldoevento.lynxpardelle.com
+Conditions:
+  IsNonProduction:
+    Fn::Not:
+      - Fn::Equals:
+          - Ref: Stage
+          - prod
+  SelfRegistrationAllowed:
+    Fn::Equals:
+      - Ref: SelfRegistrationEnabled
+      - "true"
+  HasPublicOrigin:
+    Fn::Not:
+      - Fn::Equals:
+          - Ref: PublicOrigin
+          - ""
+  CustomDomainEnabled:
+    Fn::And:
+      - Fn::Not:
+          - Fn::Equals:
+              - Ref: CertificateArn
+              - ""
+      - Fn::Not:
+          - Fn::Equals:
+              - Ref: HostedZoneId
+              - ""
+Globals:
+  Function:
+    Runtime: nodejs24.x
+    Architectures:
+      - arm64
+    Timeout: 15
+    MemorySize: 256
+    Tracing: PassThrough
+    Environment:
+      Variables:
+        STAGE:
+          Ref: Stage
+        NODE_ENV: production
+    Tags:
+      Product: SaldoEvento
+      Environment:
+        Ref: Stage
 Resources:
-  HealthApi:
+  IdentityTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Product
+          Value: SaldoEvento
+        - Key: Domain
+          Value: Identity
+  IdentityConfirmationLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName:
+        Fn::Sub: /aws/lambda/saldoevento-${Stage}-identity-confirmation
+      RetentionInDays: 14
+  IdentityTokenLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName:
+        Fn::Sub: /aws/lambda/saldoevento-${Stage}-identity-token
+      RetentionInDays: 14
+  IdentityConfirmationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: saldoevento-${Stage}-identity-confirmation
+      CodeUri: ../services/
+      Handler: identity/post-confirmation.handler
+      Timeout: 5
+      Environment:
+        Variables:
+          IDENTITY_TABLE:
+            Ref: IdentityTable
+          SELF_REGISTRATION_ENABLED:
+            Ref: SelfRegistrationEnabled
+      LoggingConfig:
+        LogFormat: JSON
+        LogGroup:
+          Ref: IdentityConfirmationLogGroup
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+              Resource:
+                Fn::GetAtt:
+                  - IdentityTable
+                  - Arn
+  IdentityTokenFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: saldoevento-${Stage}-identity-token
+      CodeUri: ../services/
+      Handler: identity/pre-token.handler
+      Timeout: 5
+      Environment:
+        Variables:
+          IDENTITY_TABLE:
+            Ref: IdentityTable
+          SELF_REGISTRATION_ENABLED:
+            Ref: SelfRegistrationEnabled
+      LoggingConfig:
+        LogFormat: JSON
+        LogGroup:
+          Ref: IdentityTokenLogGroup
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+              Resource:
+                Fn::GetAtt:
+                  - IdentityTable
+                  - Arn
+  IdentityConfirmationFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName:
+        Ref: IdentityConfirmationFunction
+      Action: lambda:InvokeFunction
+      Principal: cognito-idp.amazonaws.com
+      SourceArn:
+        Fn::GetAtt:
+          - UserPool
+          - Arn
+      SourceAccount:
+        Ref: AWS::AccountId
+  IdentityTokenFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName:
+        Ref: IdentityTokenFunction
+      Action: lambda:InvokeFunction
+      Principal: cognito-idp.amazonaws.com
+      SourceArn:
+        Fn::GetAtt:
+          - UserPool
+          - Arn
+      SourceAccount:
+        Ref: AWS::AccountId
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      UserPoolName:
+        Fn::Sub: saldoevento-${Stage}
+      UsernameAttributes:
+        - email
+      AutoVerifiedAttributes:
+        - email
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly:
+          Fn::If:
+            - SelfRegistrationAllowed
+            - false
+            - true
+      LambdaConfig:
+        PostConfirmation:
+          Fn::GetAtt:
+            - IdentityConfirmationFunction
+            - Arn
+        PreTokenGenerationConfig:
+          LambdaArn:
+            Fn::GetAtt:
+              - IdentityTokenFunction
+              - Arn
+          LambdaVersion: V1_0
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 12
+          RequireLowercase: true
+          RequireUppercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+          TemporaryPasswordValidityDays: 3
+      Schema:
+        - Name: organizationId
+          AttributeDataType: String
+          Mutable: false
+          Required: false
+          StringAttributeConstraints:
+            MinLength: "1"
+            MaxLength: "128"
+        - Name: roles
+          AttributeDataType: String
+          Mutable: true
+          Required: false
+          StringAttributeConstraints:
+            MinLength: "1"
+            MaxLength: "256"
+  UserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain:
+        Fn::Sub: saldoevento-${Stage}-${AWS::AccountId}
+      UserPoolId:
+        Ref: UserPool
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName:
+        Fn::Sub: saldoevento-${Stage}-web
+      UserPoolId:
+        Ref: UserPool
+      GenerateSecret: false
+      PreventUserExistenceErrors: ENABLED
+      EnableTokenRevocation: true
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthFlows:
+        - code
+      AllowedOAuthScopes:
+        - openid
+        - email
+      SupportedIdentityProviders:
+        - COGNITO
+      ExplicitAuthFlows:
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+        - Fn::If:
+            - IsNonProduction
+            - ALLOW_ADMIN_USER_PASSWORD_AUTH
+            - Ref: AWS::NoValue
+      AccessTokenValidity: 15
+      IdTokenValidity: 15
+      RefreshTokenValidity: 1
+      TokenValidityUnits:
+        AccessToken: minutes
+        IdToken: minutes
+        RefreshToken: days
+      ReadAttributes:
+        - email
+        - email_verified
+        - name
+        - custom:organizationId
+        - custom:roles
+      WriteAttributes:
+        - email
+        - name
+      CallbackURLs:
+        - Fn::Join:
+            - ""
+            - - Fn::If:
+                  - HasPublicOrigin
+                  - Ref: PublicOrigin
+                  - Fn::Join:
+                      - ""
+                      - - https://
+                        - Fn::FindInMap:
+                            - Environments
+                            - Ref: Stage
+                            - DomainName
+              - /auth/callback
+      LogoutURLs:
+        - Fn::If:
+            - HasPublicOrigin
+            - Ref: PublicOrigin
+            - Fn::Join:
+                - ""
+                - - https://
+                  - Fn::FindInMap:
+                      - Environments
+                      - Ref: Stage
+                      - DomainName
+  BusinessApi:
     Type: AWS::Serverless::HttpApi
     Properties:
-      StageName: !Ref Stage
-
+      StageName:
+        Ref: Stage
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 50
+        ThrottlingRateLimit: 25
+      Auth:
+        DefaultAuthorizer: CognitoJwt
+        Authorizers:
+          CognitoJwt:
+            IdentitySource: $request.header.Authorization
+            JwtConfiguration:
+              issuer:
+                Fn::Sub: https://cognito-idp.${AWS::Region}.${AWS::URLSuffix}/${UserPool}
+              audience:
+                - Ref: UserPoolClient
+  EventsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+      Tags:
+        - Key: Product
+          Value: SaldoEvento
+        - Key: Domain
+          Value: Events
+  ReconciliationTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+      Tags:
+        - Key: Product
+          Value: SaldoEvento
+        - Key: Domain
+          Value: Reconciliation
+  ImportsDlq:
+    Type: AWS::SQS::Queue
+    Properties:
+      SqsManagedSseEnabled: true
+      MessageRetentionPeriod: 1209600
+  ImportsQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      SqsManagedSseEnabled: true
+      VisibilityTimeout: 360
+      MessageRetentionPeriod: 345600
+      RedrivePolicy:
+        deadLetterTargetArn:
+          Fn::GetAtt:
+            - ImportsDlq
+            - Arn
+        maxReceiveCount: 5
+  ImportsQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - Ref: ImportsQueue
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: AllowOnlyProductBucketNotifications
+            Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action: sqs:SendMessage
+            Resource:
+              Fn::GetAtt:
+                - ImportsQueue
+                - Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn:
+                  Fn::Sub: arn:${AWS::Partition}:s3:::saldoevento-${Stage}-${AWS::AccountId}-${AWS::Region}-imports
+              StringEquals:
+                aws:SourceAccount:
+                  Ref: AWS::AccountId
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: sqs:*
+            Resource:
+              Fn::GetAtt:
+                - ImportsQueue
+                - Arn
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+  ImportsBucket:
+    Type: AWS::S3::Bucket
+    DependsOn: ImportsQueuePolicy
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      BucketName:
+        Fn::Sub: saldoevento-${Stage}-${AWS::AccountId}-${AWS::Region}-imports
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireImports
+            Status: Enabled
+            ExpirationInDays: 7
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+      CorsConfiguration:
+        CorsRules:
+          - AllowedMethods:
+              - PUT
+            AllowedHeaders:
+              - content-type
+            AllowedOrigins:
+              - Fn::If:
+                  - HasPublicOrigin
+                  - Ref: PublicOrigin
+                  - Fn::Join:
+                      - ""
+                      - - https://
+                        - Fn::FindInMap:
+                            - Environments
+                            - Ref: Stage
+                            - DomainName
+            MaxAge: 300
+      NotificationConfiguration:
+        QueueConfigurations:
+          - Event: s3:ObjectCreated:*
+            Queue:
+              Fn::GetAtt:
+                - ImportsQueue
+                - Arn
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: tenants/
+                  - Name: suffix
+                    Value: /input.csv
+  ImportsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket:
+        Ref: ImportsBucket
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Deny
+            Principal: "*"
+            Action: s3:*
+            Resource:
+              - Fn::GetAtt:
+                  - ImportsBucket
+                  - Arn
+              - Fn::Sub: ${ImportsBucket.Arn}/*
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
   HealthLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
+      LogGroupName:
+        Fn::Sub: /aws/lambda/saldoevento-${Stage}-health
       RetentionInDays: 14
-
+  EventsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName:
+        Fn::Sub: /aws/lambda/saldoevento-${Stage}-events
+      RetentionInDays: 14
+  ReconciliationLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName:
+        Fn::Sub: /aws/lambda/saldoevento-${Stage}-reconciliation
+      RetentionInDays: 14
+  ImportWorkerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName:
+        Fn::Sub: /aws/lambda/saldoevento-${Stage}-import-worker
+      RetentionInDays: 14
+  FrontendLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName:
+        Fn::Sub: /aws/lambda/saldoevento-${Stage}-frontend
+      RetentionInDays: 14
   HealthFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Runtime: nodejs24.x
-      Architectures: [arm64]
-      CodeUri: ../services/health/
-      Handler: index.handler
+      FunctionName:
+        Fn::Sub: saldoevento-${Stage}-health
+      CodeUri: ../services/
+      Handler: health/index.handler
       Timeout: 5
       MemorySize: 128
       LoggingConfig:
         LogFormat: JSON
-        LogGroup: !Ref HealthLogGroup
+        LogGroup:
+          Ref: HealthLogGroup
       Events:
         HealthRoute:
           Type: HttpApi
           Properties:
-            ApiId: !Ref HealthApi
+            ApiId:
+              Ref: BusinessApi
             Path: /health
             Method: GET
-            PayloadFormatVersion: '2.0'
-
+            PayloadFormatVersion: "2.0"
+            Auth:
+              Authorizer: NONE
+  EventsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: saldoevento-${Stage}-events
+      CodeUri: ../services/
+      Handler: events/index.handler
+      LoggingConfig:
+        LogFormat: JSON
+        LogGroup:
+          Ref: EventsLogGroup
+      Environment:
+        Variables:
+          EVENTS_TABLE:
+            Ref: EventsTable
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:Query
+                - dynamodb:PutItem
+                - dynamodb:UpdateItem
+                - dynamodb:ConditionCheckItem
+              Resource:
+                Fn::GetAtt:
+                  - EventsTable
+                  - Arn
+      Events:
+        ListEvents:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: BusinessApi
+            Path: /api/v1/events
+            Method: GET
+            PayloadFormatVersion: "2.0"
+        CreateEvent:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: BusinessApi
+            Path: /api/v1/events
+            Method: POST
+            PayloadFormatVersion: "2.0"
+        ListParticipants:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: BusinessApi
+            Path: /api/v1/events/{eventId}/participants
+            Method: GET
+            PayloadFormatVersion: "2.0"
+        CreateParticipant:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: BusinessApi
+            Path: /api/v1/events/{eventId}/participants
+            Method: POST
+            PayloadFormatVersion: "2.0"
+  ReconciliationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: saldoevento-${Stage}-reconciliation
+      CodeUri: ../services/
+      Handler: reconciliation/index.handler
+      LoggingConfig:
+        LogFormat: JSON
+        LogGroup:
+          Ref: ReconciliationLogGroup
+      Environment:
+        Variables:
+          RECONCILIATION_TABLE:
+            Ref: ReconciliationTable
+          IMPORTS_BUCKET:
+            Ref: ImportsBucket
+          EVENTS_FUNCTION_NAME:
+            Ref: EventsFunction
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:Query
+                - dynamodb:PutItem
+                - dynamodb:UpdateItem
+                - dynamodb:ConditionCheckItem
+              Resource:
+                Fn::GetAtt:
+                  - ReconciliationTable
+                  - Arn
+            - Effect: Allow
+              Action: s3:PutObject
+              Resource:
+                Fn::Sub: ${ImportsBucket.Arn}/tenants/*/events/*/imports/*/input.csv
+            - Effect: Allow
+              Action: lambda:InvokeFunction
+              Resource:
+                Fn::GetAtt:
+                  - EventsFunction
+                  - Arn
+      Events:
+        StartImport:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: BusinessApi
+            Path: /api/v1/events/{eventId}/imports
+            Method: POST
+            PayloadFormatVersion: "2.0"
+        ListImports:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: BusinessApi
+            Path: /api/v1/events/{eventId}/imports
+            Method: GET
+            PayloadFormatVersion: "2.0"
+        GetImport:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: BusinessApi
+            Path: /api/v1/events/{eventId}/imports/{batchId}
+            Method: GET
+            PayloadFormatVersion: "2.0"
+        RegisterManualPayment:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: BusinessApi
+            Path: /api/v1/events/{eventId}/payments
+            Method: POST
+            PayloadFormatVersion: "2.0"
+        Allocate:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: BusinessApi
+            Path: /api/v1/events/{eventId}/allocations
+            Method: POST
+            PayloadFormatVersion: "2.0"
+        ListMovements:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: BusinessApi
+            Path: /api/v1/events/{eventId}/movements
+            Method: GET
+            PayloadFormatVersion: "2.0"
+        ReverseMovement:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: BusinessApi
+            Path: /api/v1/events/{eventId}/movements/{movementId}/reversals
+            Method: POST
+            PayloadFormatVersion: "2.0"
+        GetBalances:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: BusinessApi
+            Path: /api/v1/events/{eventId}/balances
+            Method: GET
+            PayloadFormatVersion: "2.0"
+  ImportWorkerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: saldoevento-${Stage}-import-worker
+      CodeUri: ../services/
+      Handler: reconciliation/worker.handler
+      LoggingConfig:
+        LogFormat: JSON
+        LogGroup:
+          Ref: ImportWorkerLogGroup
+      Environment:
+        Variables:
+          RECONCILIATION_TABLE:
+            Ref: ReconciliationTable
+          IMPORTS_BUCKET:
+            Ref: ImportsBucket
+          EVENTS_FUNCTION_NAME:
+            Ref: EventsFunction
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:Query
+                - dynamodb:PutItem
+                - dynamodb:UpdateItem
+                - dynamodb:ConditionCheckItem
+              Resource:
+                Fn::GetAtt:
+                  - ReconciliationTable
+                  - Arn
+            - Effect: Allow
+              Action: s3:GetObject
+              Resource:
+                Fn::Sub: ${ImportsBucket.Arn}/tenants/*/events/*/imports/*/input.csv
+            - Effect: Allow
+              Action: lambda:InvokeFunction
+              Resource:
+                Fn::GetAtt:
+                  - EventsFunction
+                  - Arn
+      Events:
+        ImportQueue:
+          Type: SQS
+          Properties:
+            Queue:
+              Fn::GetAtt:
+                - ImportsQueue
+                - Arn
+            BatchSize: 5
+            MaximumBatchingWindowInSeconds: 1
+            FunctionResponseTypes:
+              - ReportBatchItemFailures
+            ScalingConfig:
+              MaximumConcurrency: 5
+      Timeout: 60
+      MemorySize: 512
+  FrontendAssetsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireOldVersions
+            Status: Enabled
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 30
+  FrontendFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: saldoevento-${Stage}-frontend
+      CodeUri: ../artifacts/frontend/
+      Handler: index.handler
+      Timeout: 15
+      MemorySize: 512
+      FunctionUrlConfig:
+        AuthType: AWS_IAM
+      LoggingConfig:
+        LogFormat: JSON
+        LogGroup:
+          Ref: FrontendLogGroup
+      Environment:
+        Variables:
+          PUBLIC_ORIGIN:
+            Fn::If:
+              - HasPublicOrigin
+              - Ref: PublicOrigin
+              - Fn::Join:
+                  - ""
+                  - - https://
+                    - Fn::FindInMap:
+                        - Environments
+                        - Ref: Stage
+                        - DomainName
+          COGNITO_DOMAIN:
+            Fn::Sub: https://${UserPoolDomain}.auth.${AWS::Region}.amazoncognito.com
+          COGNITO_CLIENT_ID:
+            Ref: UserPoolClient
+          SELF_REGISTRATION_ENABLED:
+            Ref: SelfRegistrationEnabled
+          NG_ALLOWED_HOSTS:
+            Fn::Join:
+              - ","
+              - - Fn::FindInMap:
+                    - Environments
+                    - Ref: Stage
+                    - DomainName
+                - "*.cloudfront.net"
+                - Fn::Sub: "*.lambda-url.${AWS::Region}.on.aws"
+      Policies: []
+  FrontendOac:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name:
+          Fn::Sub: saldoevento-${Stage}-lambda
+        OriginAccessControlOriginType: lambda
+        SigningBehavior: always
+        SigningProtocol: sigv4
+  AssetsOac:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name:
+          Fn::Sub: saldoevento-${Stage}-assets
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+  FrontendResponseHeaders:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name:
+          Fn::Sub: saldoevento-${Stage}-headers
+        SecurityHeadersConfig:
+          StrictTransportSecurity:
+            AccessControlMaxAgeSec: 31536000
+            IncludeSubdomains: true
+            Override: true
+          ContentTypeOptions:
+            Override: true
+          FrameOptions:
+            FrameOption: DENY
+            Override: true
+          ReferrerPolicy:
+            ReferrerPolicy: strict-origin-when-cross-origin
+            Override: true
+        CustomHeadersConfig:
+          Items:
+            - Header: Permissions-Policy
+              Value: camera=(), microphone=(), geolocation=(), payment=()
+              Override: true
+  FrontendDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        HttpVersion: http2and3
+        IPV6Enabled: true
+        PriceClass: PriceClass_100
+        Comment:
+          Fn::Sub: SaldoEvento ${Stage} - Angular SSR y microservicios
+        Aliases:
+          Fn::If:
+            - CustomDomainEnabled
+            - - Fn::FindInMap:
+                  - Environments
+                  - Ref: Stage
+                  - DomainName
+            - Ref: AWS::NoValue
+        ViewerCertificate:
+          Fn::If:
+            - CustomDomainEnabled
+            - AcmCertificateArn:
+                Ref: CertificateArn
+              SslSupportMethod: sni-only
+              MinimumProtocolVersion: TLSv1.2_2021
+            - CloudFrontDefaultCertificate: true
+        Origins:
+          - Id: ssr
+            DomainName:
+              Fn::Select:
+                - 2
+                - Fn::Split:
+                    - /
+                    - Fn::GetAtt:
+                        - FrontendFunctionUrl
+                        - FunctionUrl
+            OriginAccessControlId:
+              Ref: FrontendOac
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols:
+                - TLSv1.2
+              OriginReadTimeout: 20
+          - Id: assets
+            DomainName:
+              Fn::GetAtt:
+                - FrontendAssetsBucket
+                - RegionalDomainName
+            OriginAccessControlId:
+              Ref: AssetsOac
+            S3OriginConfig:
+              OriginAccessIdentity: ""
+          - Id: api
+            DomainName:
+              Fn::Sub: ${BusinessApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}
+            OriginPath:
+              Fn::Sub: /${Stage}
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols:
+                - TLSv1.2
+        DefaultCacheBehavior:
+          TargetOriginId: ssr
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          CachedMethods:
+            - GET
+            - HEAD
+          CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+          OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
+          ResponseHeadersPolicyId:
+            Ref: FrontendResponseHeaders
+          Compress: true
+        CacheBehaviors:
+          - PathPattern: /api/*
+            TargetOriginId: api
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods:
+              - GET
+              - HEAD
+              - OPTIONS
+              - PUT
+              - POST
+              - PATCH
+              - DELETE
+            CachedMethods:
+              - GET
+              - HEAD
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+            OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
+            ResponseHeadersPolicyId:
+              Ref: FrontendResponseHeaders
+            Compress: true
+          - PathPattern: /health
+            TargetOriginId: api
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods:
+              - GET
+              - HEAD
+              - OPTIONS
+            CachedMethods:
+              - GET
+              - HEAD
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+            OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
+            ResponseHeadersPolicyId:
+              Ref: FrontendResponseHeaders
+            Compress: true
+          - PathPattern: /assets/*
+            TargetOriginId: assets
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods:
+              - GET
+              - HEAD
+              - OPTIONS
+            CachedMethods:
+              - GET
+              - HEAD
+            CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+            ResponseHeadersPolicyId:
+              Ref: FrontendResponseHeaders
+            Compress: true
+          - PathPattern: /fonts/*
+            TargetOriginId: assets
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods:
+              - GET
+              - HEAD
+              - OPTIONS
+            CachedMethods:
+              - GET
+              - HEAD
+            CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+            ResponseHeadersPolicyId:
+              Ref: FrontendResponseHeaders
+            Compress: true
+          - PathPattern: "*.js"
+            TargetOriginId: assets
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods:
+              - GET
+              - HEAD
+              - OPTIONS
+            CachedMethods:
+              - GET
+              - HEAD
+            CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+            ResponseHeadersPolicyId:
+              Ref: FrontendResponseHeaders
+            Compress: true
+          - PathPattern: "*.css"
+            TargetOriginId: assets
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods:
+              - GET
+              - HEAD
+              - OPTIONS
+            CachedMethods:
+              - GET
+              - HEAD
+            CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+            ResponseHeadersPolicyId:
+              Ref: FrontendResponseHeaders
+            Compress: true
+          - PathPattern: /favicon.svg
+            TargetOriginId: assets
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods:
+              - GET
+              - HEAD
+              - OPTIONS
+            CachedMethods:
+              - GET
+              - HEAD
+            CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+            ResponseHeadersPolicyId:
+              Ref: FrontendResponseHeaders
+            Compress: true
+          - PathPattern: /ejemplo-importacion.csv
+            TargetOriginId: assets
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods:
+              - GET
+              - HEAD
+              - OPTIONS
+            CachedMethods:
+              - GET
+              - HEAD
+            CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+            ResponseHeadersPolicyId:
+              Ref: FrontendResponseHeaders
+            Compress: true
+        CustomErrorResponses:
+          - ErrorCode: 500
+            ErrorCachingMinTTL: 0
+          - ErrorCode: 502
+            ErrorCachingMinTTL: 0
+          - ErrorCode: 503
+            ErrorCachingMinTTL: 0
+          - ErrorCode: 504
+            ErrorCachingMinTTL: 0
+  FrontendUrlPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName:
+        Ref: FrontendFunction
+      Action: lambda:InvokeFunctionUrl
+      Principal: cloudfront.amazonaws.com
+      FunctionUrlAuthType: AWS_IAM
+      SourceArn:
+        Fn::Sub: arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${FrontendDistribution}
+  FrontendInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName:
+        Ref: FrontendFunction
+      Action: lambda:InvokeFunction
+      Principal: cloudfront.amazonaws.com
+      InvokedViaFunctionUrl: true
+      SourceArn:
+        Fn::Sub: arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${FrontendDistribution}
+  FrontendAssetsPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket:
+        Ref: FrontendAssetsBucket
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource:
+              Fn::Sub: ${FrontendAssetsBucket.Arn}/*
+            Condition:
+              StringEquals:
+                AWS:SourceArn:
+                  Fn::Sub: arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${FrontendDistribution}
+          - Effect: Deny
+            Principal: "*"
+            Action: s3:*
+            Resource:
+              - Fn::GetAtt:
+                  - FrontendAssetsBucket
+                  - Arn
+              - Fn::Sub: ${FrontendAssetsBucket.Arn}/*
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+  FrontendDnsA:
+    Type: AWS::Route53::RecordSet
+    Condition: CustomDomainEnabled
+    Properties:
+      HostedZoneId:
+        Ref: HostedZoneId
+      Name:
+        Fn::FindInMap:
+          - Environments
+          - Ref: Stage
+          - DomainName
+      Type: A
+      AliasTarget:
+        DNSName:
+          Fn::GetAtt:
+            - FrontendDistribution
+            - DomainName
+        HostedZoneId: Z2FDTNDATAQYW2
+        EvaluateTargetHealth: false
+  FrontendDnsAAAA:
+    Type: AWS::Route53::RecordSet
+    Condition: CustomDomainEnabled
+    Properties:
+      HostedZoneId:
+        Ref: HostedZoneId
+      Name:
+        Fn::FindInMap:
+          - Environments
+          - Ref: Stage
+          - DomainName
+      Type: AAAA
+      AliasTarget:
+        DNSName:
+          Fn::GetAtt:
+            - FrontendDistribution
+            - DomainName
+        HostedZoneId: Z2FDTNDATAQYW2
+        EvaluateTargetHealth: false
 Outputs:
+  IdentityTableName:
+    Value:
+      Ref: IdentityTable
+  FrontendUrl:
+    Value:
+      Fn::Sub: https://${FrontendDistribution.DomainName}
+  ProductDomain:
+    Value:
+      Fn::FindInMap:
+        - Environments
+        - Ref: Stage
+        - DomainName
+  FrontendAssetsBucketName:
+    Value:
+      Ref: FrontendAssetsBucket
+  ApiUrl:
+    Value:
+      Fn::Sub: https://${BusinessApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/${Stage}
   HealthUrl:
-    Value: !Sub https://${HealthApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/${Stage}/health
+    Value:
+      Fn::Sub: https://${BusinessApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/${Stage}/health
+  UserPoolId:
+    Value:
+      Ref: UserPool
+  UserPoolClientId:
+    Value:
+      Ref: UserPoolClient
+  CognitoDomain:
+    Value:
+      Fn::Sub: https://${UserPoolDomain}.auth.${AWS::Region}.amazoncognito.com
+  ImportsBucketName:
+    Value:
+      Ref: ImportsBucket
+  ImportsDeadLetterQueueUrl:
+    Value:
+      Ref: ImportsDlq

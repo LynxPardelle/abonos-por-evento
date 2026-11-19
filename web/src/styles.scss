@@ -1,10 +1,27 @@
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  background: #f3f6f8;
-  color: #183043;
-  font-family: Inter, system-ui, sans-serif;
-}
+@use './app/features/marketing/marketing';
+@font-face { font-family:'DM Sans'; font-style:normal; font-weight:100 1000; font-display:swap; src:url('/fonts/dm-sans-variable.ttf') format('truetype'); }
+@font-face { font-family:'Manrope'; font-style:normal; font-weight:200 800; font-display:swap; src:url('/fonts/manrope-variable.ttf') format('truetype'); }
+:root { color-scheme: light; --ink:#1d302b; --muted:#697770; --green:#245c49; --line:#dce3de; --paper:#f7f9f6; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--paper); color:var(--ink); font-family:'DM Sans',system-ui,sans-serif; font-size:14px; }
+button,input,select { font:inherit; }
+button,a,input,select { -webkit-tap-highlight-color:transparent; }
+a { color:var(--green); text-underline-offset:4px; }
+button { border:1px solid var(--green); border-radius:6px; background:var(--green); color:#fff; font-weight:600; padding:12px 18px; cursor:pointer; transition:background .15s,transform .15s; }
+button:hover:not(:disabled) { background:#174433; transform:translateY(-1px); }
+button:disabled { opacity:.45; cursor:default; }
+button.secondary { background:transparent; color:var(--green); border-color:#bdcfc3; }
+button.secondary:hover:not(:disabled) { background:#edf3ed; }
+button.text-button { background:none; color:var(--green); border:0; padding:8px; text-decoration:underline; text-underline-offset:4px; }
+button.small { padding:8px 12px; font-size:12px; }
+input,select { width:100%; min-width:0; border:1px solid #bdc9c1; border-radius:5px; padding:11px 12px; background:#fff; color:var(--ink); }
+input::placeholder { color:#859087; }
+label { display:grid; gap:8px; font-weight:500; font-size:12px; }
+:focus-visible { outline:3px solid #a4c39c; outline-offset:3px; }
+h1,h2,h3,.brand { font-family:Manrope,system-ui,sans-serif; }
+h1,h2,p { margin-top:0; }
+h1 { font-size:clamp(28px,3vw,38px); letter-spacing:-1.4px; font-weight:600; margin-bottom:0; }
+h2 { font-size:19px; font-weight:600; letter-spacing:-.5px; }
+p { line-height:1.65; }
+.sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; }
+@media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none!important; transition:none!important; } }

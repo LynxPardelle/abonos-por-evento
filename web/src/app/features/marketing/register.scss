@@ -1,0 +1,33 @@
+:host { display: block; }
+.register-page { min-height: 100svh; }
+.back-link { color: #556b59; font-size: .9rem; }
+.registration-layout { display: grid; grid-template-columns: 1fr 1fr; min-height: calc(100svh - 9.5rem); }
+.registration-story { padding: clamp(3rem, 6vw, 6rem) clamp(2rem, 6vw, 6rem); background: #173e31; color: #f4faec; }
+.registration-story .overline { color: #c1d6b5; }
+.registration-story h1 { font-size: clamp(2.4rem, 4vw, 4rem); line-height: 1.12; letter-spacing: -.06em; font-weight: 500; margin-bottom: 1.5rem; }
+.registration-intro { max-width: 26rem; color: #c4d5bc; font-size: 1.1rem; }
+.registration-benefits { margin: 2.5rem 0; padding: 0; list-style: none; }
+.registration-benefits li { padding: 1rem 0 1rem 1.7rem; border-top: 1px solid #40624b; position: relative; color: #e0ead8; line-height: 1.6; font-size: .95rem; }
+.registration-benefits li::before { content: '✓'; position: absolute; left: 0; color: #bed5a3; }
+.registration-note { border-top: 1px solid #40624b; padding-top: 1.5rem; font-size: .85rem; color: #b8ccab; }
+.registration-note strong { color: #deead4; font-size: .95rem; }
+.registration-note p { margin-bottom: 0; max-width: 28rem; }
+.registration-action { width: 100%; max-width: 42rem; padding: clamp(3rem, 6vw, 5rem) clamp(2rem, 5vw, 5rem); align-self: center; }
+.registration-action h2 { font-size: clamp(1.8rem, 2.4vw, 2.4rem); line-height: 1.2; letter-spacing: -.05em; font-weight: 500; margin-bottom: 1rem; }
+.registration-action > p { color: #657261; font-size: .95rem; }
+.registration-action ol { margin: 2rem 0; padding-left: 1.25rem; color: #59774d; }
+.registration-action li { padding: .4rem 0 .4rem .5rem; }
+.registration-action li > span { color: #2f5034; font-size: .95rem; font-weight: 500; }
+.registration-action li > p { color: #6b7863; font-size: .85rem; margin-top: .3rem; margin-bottom: 0; }
+.registration-cta { display: flex; width: 100%; margin-top: 1rem; }
+.registration-status { padding: 1rem; background: #eaf0e4; color: #53684a; border-left: 2px solid #9cb48a; font-size: .85rem; line-height: 1.6; }
+.registration-status strong { display: block; margin-bottom: .3rem; }
+.registration-status p { margin-bottom: 0; }
+.registration-login { margin-top: 1.5rem; text-align: center; }
+.inline-login { background: none; border: 0; color: #285a3c; padding: .3rem; font-size: .95rem; text-decoration: underline; text-underline-offset: .3em; }
+.inline-login:hover:not(:disabled) { background: none; }
+.registration-action .data-note { margin-top: 2rem; padding-top: 1.3rem; border-top: 1px solid #dce5d4; font-size: .8rem; line-height: 1.8; color: #74806e; }
+.registration-action .registration-error { background: #f5e6dd; color: #844e36; border-radius: .3rem; padding: 1rem; font-size: .9rem; }
+.registration-footer { min-height: 4rem; display: flex; align-items: center; justify-content: center; gap: .3em; color: #73806c; font-size: .8rem; }
+@media (max-width: 850px) { .registration-layout { grid-template-columns: 1fr; } .registration-story { padding: 2rem; } .registration-story h1 { font-size: 2.4rem; } .registration-story h1 br { display: none; } .registration-benefits, .registration-note { display: none; } .registration-action { max-width: 42rem; margin: auto; padding: 2rem; } }
+@media (max-width: 420px) { .back-link { font-size: .8rem; } .registration-story, .registration-action { padding-inline: 1.3rem; } }
