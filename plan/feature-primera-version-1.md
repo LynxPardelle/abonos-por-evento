@@ -57,7 +57,7 @@ Estado **In progress**. El producto adopta SaldoEvento y una arquitectura de mic
 | Task | Description | Completed | Date |
 | --- | --- | --- | --- |
 | TASK-003 | Implementar rutas de eventos, participantes/saldos, importaciones y movimientos en web/src/app/features/workspace; SignalStore por ruta, servicios HTTP y acceso PKCE. Mostrar evidencia, confirmación explícita, errores de lote y progreso; recargar desde backend sin aplicar sugerencias automáticamente. | Implementado; recorrido navegador verificado | 2026-11-19 |
-| TASK-010 | Construir SSR, empaquetar artifacts/frontend con serverless-http y manifiesto con hashes, probar el handler Lambda real y validar host/caché. Añadir CI sin despliegue automático. | Implementado; verificación final en curso | 2026-11-19 |
+| TASK-010 | Construir SSR, empaquetar artifacts/frontend con serverless-http y manifiesto con hashes, probar el handler Lambda real y validar host/caché. Añadir CI sin despliegue automático. | Completado; SSR local y AWS aprobados | 2026-11-19 |
 
 ### Implementation Phase 5
 
@@ -66,7 +66,7 @@ Estado **In progress**. El producto adopta SaldoEvento y una arquitectura de mic
 | Task | Description | Completed | Date |
 | --- | --- | --- | --- |
 | TASK-004 | Ejecutar services/reconciliation/pilot.mjs con CSV sintético: dos abonos, reverso, referencia ambigua, fila rechazada, duplicado y fallo/replay simulado. Esperar 75000 unidades menores MXN y cero discrepancias; ejecutar también el recorrido HTTP local y navegador con recarga. | Piloto sintético local aprobado | 2026-11-19 |
-| TASK-008 | Revisar y ejecutar change set nuevo saldoevento-dev mediante Deploy-Development.ps1; publicar assets; ejecutar smoke-cloud.mjs con usuarios temporales sintéticos y correos suprimidos. Verificar Cognito/JWT, IAM, DynamoDB, S3 checksum, SQS, ledger, tenant y roles. Guardar sólo reporte sanitizado bajo artifacts/deployments/dev. | En curso; no declarar aprobado sin reporte cloud | |
+| TASK-008 | Revisar y ejecutar change set nuevo saldoevento-dev mediante Deploy-Development.ps1; publicar assets; ejecutar smoke-cloud.mjs con usuarios temporales sintéticos y correos suprimidos. Verificar Cognito/JWT, IAM, DynamoDB, S3 checksum, SQS, ledger, tenant y roles. Guardar reporte sanitizado en docs/verificacion/development-2026-11-19.json. | Completado en AWS development; 12 checks aprobados | 2026-11-19 |
 | TASK-009 | Provisionar usuario real/organización, ejecutar escenario autorizado del organizador, revisar cierre/métricas/alertas y promover PR development → testing → main. Publicar saldoevento.lynxpardelle.com después de verificación de testing. | Pendiente | |
 
 ## 3. Alternatives
@@ -98,7 +98,7 @@ Estado **In progress**. El producto adopta SaldoEvento y una arquitectura de mic
 
 ## 7. Risks & Assumptions
 
-- **RISK-001** Límite del piloto: CSV1MiB/500filas y batch serializado300000bytes. Un lote mayor debe dividirse; los errores quedan visibles.
+- **RISK-001** Límite del piloto: CSV de 1 MiB/500 filas y batch serializado de 300000 bytes. Un lote mayor debe dividirse; los errores quedan visibles.
 - **RISK-002** Consultas de ledger y participantes cargan el conjunto del evento en memoria; una escala superior al piloto requiere paginación pública y proyecciones de consulta más específicas.
 - **RISK-003** La marca se eligió con búsqueda pública editorial; no se afirma exclusividad registral. El repositorio remoto conserva su nombre técnico histórico.
 - **ASSUMPTION-001** Un organizador aportará un escenario y datos autorizados para aceptación. El piloto sintético y un despliegue dev no sustituyen esa aceptación.
