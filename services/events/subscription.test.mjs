@@ -10,7 +10,7 @@ const actor = (code = 'event', overrides = {}) => ({
   eventIds: null,
   plan: { code },
   limits: { maxActiveEvents: { pilot: null, event: 1, organizer: 5, team: 20 }[code] },
-  capabilities: { manageTemplates: ['organizer', 'team'].includes(code) },
+  capabilities: { createEvent: true, manageTemplates: ['organizer', 'team'].includes(code) },
   accessGuards: [],
   ...overrides,
 });

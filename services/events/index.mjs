@@ -56,7 +56,7 @@ const pilotAccess = async (request, roles) => ({
   eventIds: null,
   plan: { code: 'pilot' },
   limits: { maxActiveEvents: null },
-  capabilities: { manageTemplates: false },
+  capabilities: { createEvent: true, manageTemplates: false },
   accessGuards: [],
 });
 const visible = (actor, eventId) =>
@@ -67,6 +67,17 @@ const requireRevision = (value, label, minimum = 0) => {
       400,
       'INVALID_VERSION',
       `${label} debe ser un entero mayor o igual a ${minimum}.`,
+    );
+  return value;
+};
+// Lifecycle commands share the public closing contract, not the 80-character
+// resource identifier limit. Their durable repository keys hash this value.
+const lifecycleOperationId = (value) => {
+  if (typeof value !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,255}$/.test(value))
+    throw new DomainError(
+      400,
+      'INVALID_OPERATION',
+      'operationId debe tener entre 1 y 256 caracteres admitidos.',
     );
   return value;
 };
@@ -151,7 +162,9 @@ export function createEventsHandler({ repository, accessResolver = pilotAccess }
             'FORBIDDEN',
             'La operación necesita permisos para gestionar el cierre.',
           );
-        const input = { operationId: validateId(internal.operationId, 'operationId') };
+        const input = {
+          operationId: lifecycleOperationId(internal.operationId),
+        };
         if (internal.action === 'finalizeReopen')
           input.lifecycleVersion = requireRevision(
             internal.lifecycleVersion,
@@ -178,7 +191,10 @@ export function createEventsHandler({ repository, accessResolver = pilotAccess }
       const identity = await accessResolver(
         request,
         method === 'GET' ? ['auditor'] : ['operator'],
-        { ...(routeEvent ? { eventId: routeEvent[1] } : {}) },
+        {
+          ...(routeEvent ? { eventId: routeEvent[1] } : {}),
+          ...(method === 'POST' && path === '/api/v1/events' ? { capability: 'createEvent' } : {}),
+        },
       );
       const { organizationId } = identity;
       if (path === '/api/v1/events') {
@@ -193,6 +209,12 @@ export function createEventsHandler({ repository, accessResolver = pilotAccess }
             },
           });
         if (method === 'POST') {
+          if (Array.isArray(identity.eventIds) || identity.capabilities?.createEvent !== true)
+            throw new DomainError(
+              403,
+              'PLAN_CAPABILITY_REQUIRED',
+              'Tu acceso actual no permite crear eventos.',
+            );
           const body = parseBody(request);
           rejectUnknown(body, ['eventId', 'operationId', 'name', 'currency']);
           const currency = body.currency;
