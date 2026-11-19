@@ -8,7 +8,7 @@
   },
   "scripts": {
     "test": "node --test",
-    "test:services": "node --test services/**/*.test.mjs",
+    "test:services": "node --test \"services/**/*.test.mjs\"",
     "test:web": "npm --prefix web test -- --watch=false",
     "build:web": "npm --prefix web run build",
     "package:frontend": "node scripts/package-frontend.mjs",

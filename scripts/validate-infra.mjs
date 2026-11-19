@@ -3,8 +3,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseDocument } from 'yaml';
 
-const noCache = '413f1605-92d5-4f7d-972d-2b72296318e2';
+// Public managed policy identities confirmed against the CloudFront API on 2026-11-19:
+// aws cloudfront list-cache-policies --type managed
+// aws cloudfront list-origin-request-policies --type managed
+const noCache = '4135ea2d-6df8-44a3-9df3-4b5a84be39ad';
 const forwardAuthorization = 'b689b0a8-53d0-40ab-baf2-68738e2966ac';
+const knownCachePolicyIds = new Set([noCache, '658327ea-f89d-4fab-a63d-7e88639e58f6']);
 
 // Offline checks for architectural and security contracts; cfn-lint validates the AWS schemas separately.
 export function validateInfrastructure(template) {
@@ -58,6 +62,11 @@ export function validateInfrastructure(template) {
   const business = distribution.CacheBehaviors?.find((behavior) => behavior.PathPattern === '/api/*');
   require(business?.CachePolicyId === noCache, 'API caching must be disabled.');
   require(business?.OriginRequestPolicyId === forwardAuthorization, 'API requests must forward authorization without forwarding the viewer Host.');
+  for (const behavior of [distribution.DefaultCacheBehavior, ...(distribution.CacheBehaviors ?? [])]) {
+    const id = behavior?.CachePolicyId;
+    const known = typeof id === 'string' ? knownCachePolicyIds.has(id) : id?.Ref && resources[id.Ref]?.Type === 'AWS::CloudFront::CachePolicy';
+    require(known, `CachePolicyKnown: ${behavior?.PathPattern ?? 'default'} must reference a verified managed policy or a cache policy defined by this template.`);
+  }
   for (const [name, resource] of Object.entries(resources)) {
     if (resource.Type === 'AWS::Logs::LogGroup') require(resource.Properties.RetentionInDays > 0 && resource.Properties.RetentionInDays <= 30, `${name} must have bounded log retention.`);
     for (const policy of (resource.Type === 'AWS::Serverless::Function' ? resource.Properties?.Policies : []) ?? []) {

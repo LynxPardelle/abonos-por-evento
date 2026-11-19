@@ -50,3 +50,11 @@ test('a public SSR origin or API cache is rejected before deployment', async () 
   assert.ok(errors.some((error) => /AWS_IAM/.test(error)));
   assert.ok(errors.some((error) => /API caching/.test(error)));
 });
+
+test('unknown cache policy IDs are rejected in every CloudFront behavior', async () => {
+  const validate = await validator();
+  const invalid = structuredClone(template);
+  const distribution = invalid.Resources.FrontendDistribution.Properties.DistributionConfig;
+  distribution.CacheBehaviors.find((behavior) => behavior.TargetOriginId === 'assets').CachePolicyId = '00000000-0000-0000-0000-000000000000';
+  assert.ok(validate(invalid).some((error) => /CachePolicyKnown/.test(error)), 'A syntactically valid UUID must not bypass managed-policy validation');
+});

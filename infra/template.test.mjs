@@ -52,7 +52,8 @@ test('Angular SSR is private behind CloudFront OAC and business requests are nev
   assert.equal(resources.FrontendUrlPermission.Properties.Action, 'lambda:InvokeFunctionUrl');
   const distribution = resources.FrontendDistribution.Properties.DistributionConfig;
   const api = distribution.CacheBehaviors.find((behavior) => behavior.PathPattern === '/api/*');
-  assert.equal(api.CachePolicyId, '413f1605-92d5-4f7d-972d-2b72296318e2');
+  // Confirmed with AWS CloudFront list-cache-policies --type managed on 2026-11-19.
+  assert.equal(api.CachePolicyId, '4135ea2d-6df8-44a3-9df3-4b5a84be39ad');
   assert.equal(api.OriginRequestPolicyId, 'b689b0a8-53d0-40ab-baf2-68738e2966ac');
   assert.equal(api.AllowedMethods.length, 7);
   assert.equal(distribution.DefaultCacheBehavior.CachePolicyId, api.CachePolicyId);
