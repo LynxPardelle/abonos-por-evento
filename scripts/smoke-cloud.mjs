@@ -5,7 +5,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const expectedStack = 'saldoevento-dev';
-const expectedOrigin = 'https://saldoevento-dev.lynxpardelle.com';
+const targets = Object.freeze({
+  'saldoevento-dev': { stage:'dev', environment:'development', origin:'https://saldoevento-dev.lynxpardelle.com' },
+  'saldoevento-test': { stage:'test', environment:'testing', origin:'https://saldoevento-test.lynxpardelle.com' },
+});
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 
 class SmokeFailure extends Error {
@@ -20,26 +23,27 @@ export function parseArgs(argv) {
     requireCheck(['--stack', '--region'].includes(key) && typeof value === 'string' && !value.startsWith('--'), 'INVALID_ARGUMENTS');
     options[key.slice(2)] = value;
   }
-  requireCheck(options.stack === expectedStack, 'DEVELOPMENT_STACK_REQUIRED');
+  requireCheck(Object.hasOwn(targets, options.stack), 'NON_PRODUCTION_STACK_REQUIRED');
   requireCheck(/^[a-z]{2}-[a-z]+-[0-9]$/.test(options.region), 'INVALID_REGION');
   return options;
 }
 
 export function validateCloudTarget(stackName, stack) {
-  requireCheck(stackName === expectedStack && stack?.StackName === expectedStack, 'DEVELOPMENT_STACK_REQUIRED');
+  requireCheck(Object.hasOwn(targets, stackName) && stack?.StackName === stackName, 'NON_PRODUCTION_STACK_REQUIRED');
+  const target = targets[stackName];
   const parameters = Object.fromEntries((stack.Parameters ?? []).map((parameter) => [parameter.ParameterKey, parameter.ParameterValue]));
   const outputs = Object.fromEntries((stack.Outputs ?? []).map((output) => [output.OutputKey, output.OutputValue]));
-  requireCheck(parameters.Stage === 'dev', 'DEVELOPMENT_STAGE_REQUIRED');
+  requireCheck(parameters.Stage === target.stage, 'TARGET_STAGE_REQUIRED');
   requireCheck(['CREATE_COMPLETE', 'UPDATE_COMPLETE', 'UPDATE_ROLLBACK_COMPLETE', 'IMPORT_COMPLETE'].includes(stack.StackStatus), 'STACK_NOT_READY');
   const origin = parameters.PublicOrigin || `https://${outputs.ProductDomain ?? ''}`;
-  requireCheck(origin === expectedOrigin && outputs.ProductDomain === 'saldoevento-dev.lynxpardelle.com', 'DEVELOPMENT_ORIGIN_REQUIRED');
+  requireCheck(origin === target.origin && outputs.ProductDomain === new URL(target.origin).hostname, 'TARGET_ORIGIN_REQUIRED');
   requireCheck(typeof outputs.UserPoolId === 'string' && /^[a-z]{2}-[a-z]+-\d_[A-Za-z0-9]+$/.test(outputs.UserPoolId), 'USER_POOL_OUTPUT_REQUIRED');
   requireCheck(typeof outputs.UserPoolClientId === 'string' && /^[A-Za-z0-9-]+$/.test(outputs.UserPoolClientId), 'USER_POOL_CLIENT_OUTPUT_REQUIRED');
-  return { origin, userPoolId: outputs.UserPoolId, clientId: outputs.UserPoolClientId };
+  return { ...target, origin, userPoolId: outputs.UserPoolId, clientId: outputs.UserPoolClientId };
 }
 
 export function describeStack({ stack: stackName, region }) {
-  requireCheck(stackName === expectedStack, 'DEVELOPMENT_STACK_REQUIRED');
+  requireCheck(Object.hasOwn(targets, stackName), 'NON_PRODUCTION_STACK_REQUIRED');
   try {
     const source = execFileSync('aws', ['cloudformation', 'describe-stacks', '--stack-name', stackName, '--region', region, '--output', 'json', '--no-cli-pager'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 30_000 });
     const description = JSON.parse(source);
@@ -60,7 +64,8 @@ export async function createCognitoAdapter({ region, client, commands } = {}) {
         UserPoolId: userPoolId, Username: username, MessageAction: 'SUPPRESS',
         UserAttributes: [
           { Name: 'email', Value: username }, { Name: 'email_verified', Value: 'true' },
-          { Name: 'custom:organizationId', Value: organizationId }, { Name: 'custom:roles', Value: roles },
+          ...(organizationId !== undefined ? [{ Name: 'custom:organizationId', Value: organizationId }] : []),
+          ...(roles !== undefined ? [{ Name: 'custom:roles', Value: roles }] : []),
         ],
       }));
     },
@@ -89,7 +94,7 @@ export async function runCloudSmoke({ stackName, stackDescription, region = 'us-
   const eventId = `smoke-${runId}`; const participantId = `smoke-ana-${runId}`;
   const attemptedUsers = []; const tokens = new Map();
   const report = {
-    schemaVersion: 1, product: 'SaldoEvento', environment: 'development', stack: stackName, region, origin: target.origin,
+    schemaVersion: 2, product: 'SaldoEvento', environment: target.environment, stack: stackName, region, origin: target.origin,
     startedAt: new Date(clock()).toISOString(), status: 'running', checks: [], metrics: {},
     synthetic: { runId, eventId, organizationA, organizationB },
     cleanup: { attemptedUsers: 0, createdUsers: 0, deletedUsers: 0, failures: 0 },
@@ -117,6 +122,8 @@ export async function runCloudSmoke({ stackName, stackDescription, region = 'us-
       { label: 'operator', organizationId: organizationA, roles: 'operator' },
       { label: 'otherTenant', organizationId: organizationB, roles: 'auditor' },
       { label: 'importer', organizationId: organizationA, roles: 'importer' },
+      // No custom tenant or role is supplied: the trusted PreToken trigger must provision it.
+      { label: 'selfService' },
     ]) {
       const username = `smoke-${runId}-${user.label.toLowerCase()}@example.test`;
       // Passwords, ID tokens and signed URLs are never placed in the report or logs.
@@ -127,7 +134,7 @@ export async function runCloudSmoke({ stackName, stackDescription, region = 'us-
       await cognito.setPassword({ ...target, username, password });
       tokens.set(user.label, await cognito.authenticate({ ...target, username, password }));
     }
-    passed(activeCheck, { count: 3, notificationsSuppressed: true });
+    passed(activeCheck, { count: 4, notificationsSuppressed: true });
     const operatorToken = tokens.get('operator');
 
     activeCheck = 'cloud_frontend';
@@ -213,7 +220,28 @@ export async function runCloudSmoke({ stackName, stackDescription, region = 'us-
     const total = balances.balances.reduce((sum, balance) => sum + BigInt(balance.paidMinor), 0n).toString();
     requireCheck(total === '75000' && balances.version === 3, 'FINAL_BALANCE_MISMATCH');
     report.metrics = { currency: 'MXN', paidMinor: total, movements: ledger.movements.length, ledgerVersion: balances.version, batches: imports.batches.length, participants: 3 };
-    passed(activeCheck, { paidMinor: total, movements: 3 }); report.status = 'passed';
+    passed(activeCheck, { paidMinor: total, movements: 3 });
+
+    activeCheck = 'self_service_provisioning';
+    const selfServiceToken = tokens.get('selfService');
+    let selfClaims;
+    try { selfClaims = JSON.parse(Buffer.from(selfServiceToken.split('.')[1], 'base64url').toString('utf8')); }
+    catch { throw new SmokeFailure('SELF_SERVICE_TOKEN_INVALID'); }
+    requireCheck(typeof selfClaims.sub === 'string' && selfClaims.sub.length <= 128, 'SELF_SERVICE_TOKEN_INVALID');
+    const expectedOrganization = `org-${createHash('sha256').update(JSON.stringify([target.userPoolId,selfClaims.sub])).digest('hex').slice(0,32)}`;
+    requireCheck(selfClaims['custom:organizationId'] === expectedOrganization && selfClaims['custom:roles'] === 'admin' && selfClaims['custom:tier'] === 'pilot' && ![organizationA,organizationB].includes(expectedOrganization), 'SELF_SERVICE_IDENTITY_MISMATCH');
+    // JWT decoding above is an assertion only; HTTP API performs the signature/issuer/audience validation.
+    await request('GET', `${base}/participants`, selfServiceToken, undefined, 404);
+    const emptyWorkspace = await request('GET', '/api/v1/events', selfServiceToken);
+    requireCheck(Array.isArray(emptyWorkspace.events) && emptyWorkspace.events.length === 0, 'SELF_SERVICE_WORKSPACE_NOT_ISOLATED');
+    const ownEventId = `signup-${runId}`;
+    const ownEvent = await request('POST','/api/v1/events',selfServiceToken,{ eventId:ownEventId, operationId:`signup-${runId}`, name:`[SINTÉTICO REGISTRO ${runId}] SaldoEvento ${target.environment}`, currency:'MXN' },201);
+    requireCheck(ownEvent.event?.eventId === ownEventId, 'SELF_SERVICE_EVENT_FAILED');
+    await request('GET', `/api/v1/events/${ownEventId}/participants`, operatorToken, undefined, 404);
+    report.synthetic.selfServiceEventId = ownEventId;
+    report.synthetic.selfServiceOrganizationId = expectedOrganization;
+    passed(activeCheck,{ organizationAssignedByServer:true, roles:'admin', tier:'pilot', crossTenantAccess:'rejected' });
+    report.status = 'passed';
   } catch (error) {
     report.status = 'failed';
     // Provider/transport errors can contain passwords, JWTs or presigned URLs.
@@ -235,10 +263,10 @@ export async function runCloudSmoke({ stackName, stackDescription, region = 'us-
 export async function main(argv = process.argv.slice(2)) {
   const options = parseArgs(argv);
   const stackDescription = describeStack(options);
-  validateCloudTarget(options.stack, stackDescription);
+  const target = validateCloudTarget(options.stack, stackDescription);
   const cognito = await createCognitoAdapter({ region: options.region });
   const report = await runCloudSmoke({ stackName: options.stack, stackDescription, region: options.region, cognito });
-  const outputDir = path.join(repositoryRoot, 'artifacts/deployments/dev');
+  const outputDir = path.join(repositoryRoot, 'artifacts/deployments', target.stage);
   await mkdir(outputDir, { recursive: true });
   await writeFile(path.join(outputDir, 'cloud-smoke.json'), `${JSON.stringify(report, null, 2)}\n`, 'utf8');
   console.log(JSON.stringify(report, null, 2));

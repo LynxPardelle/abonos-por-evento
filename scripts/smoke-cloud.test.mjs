@@ -1,14 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { createHash } from 'node:crypto';
 import { createCognitoAdapter, parseArgs, runCloudSmoke, validateCloudTarget } from './smoke-cloud.mjs';
 
 const stack = (stage = 'dev') => ({
-  StackName: 'saldoevento-dev', StackStatus: 'CREATE_COMPLETE',
-  Parameters: [{ ParameterKey: 'Stage', ParameterValue: stage }, { ParameterKey: 'PublicOrigin', ParameterValue: 'https://saldoevento-dev.lynxpardelle.com' }],
+  StackName: stage === 'test' ? 'saldoevento-test' : 'saldoevento-dev', StackStatus: 'CREATE_COMPLETE',
+  Parameters: [{ ParameterKey: 'Stage', ParameterValue: stage }, { ParameterKey: 'PublicOrigin', ParameterValue: `https://saldoevento-${stage === 'test' ? 'test' : 'dev'}.lynxpardelle.com` }],
   Outputs: [
     { OutputKey: 'UserPoolId', OutputValue: 'us-east-1_synthetic' },
     { OutputKey: 'UserPoolClientId', OutputValue: 'synthetic-client' },
-    { OutputKey: 'ProductDomain', OutputValue: 'saldoevento-dev.lynxpardelle.com' },
+    { OutputKey: 'ProductDomain', OutputValue: `saldoevento-${stage === 'test' ? 'test' : 'dev'}.lynxpardelle.com` },
   ],
 });
 
@@ -23,14 +24,22 @@ test('cloud smoke refuses production, wrong stages and foreign origins before cr
   assert.equal(touched, false);
 });
 
-function syntheticCloud({ failUpload = false, failSecondUser = false } = {}) {
+function syntheticCloud({ failUpload = false, failSecondUser = false, wrongRegistrationClaim = false } = {}) {
   const created = []; const deleted = []; const identities = new Map(); const participants = []; const movements = []; const operations = new Map();
   let event; let batch; let uploadCount = 0;
   const response = (status, data) => new Response(typeof data === 'string' ? data : JSON.stringify(data), { status });
   const cognito = {
     async createUser(input) { created.push(input); if (failSecondUser && created.length === 2) throw Object.assign(new Error('private provider diagnostic'), { name: 'SyntheticProviderFailure' }); },
     async setPassword() {},
-    async authenticate({ username }) { const user = created.find((entry) => entry.username === username); const token = `secret-token-${identities.size}`; identities.set(token, user); return token; },
+    async authenticate({ username, userPoolId }) {
+      const user = created.find((entry) => entry.username === username);
+      const sub = `synthetic-sub-${identities.size}`;
+      const assignedOrganization = `org-${createHash('sha256').update(JSON.stringify([userPoolId, sub])).digest('hex').slice(0, 32)}`;
+      const normalized = { ...user, organizationId: user.organizationId ?? assignedOrganization, roles: user.roles ?? 'admin' };
+      const claims = { sub, 'custom:organizationId': !user.organizationId && wrongRegistrationClaim ? 'foreign-organization' : normalized.organizationId, 'custom:roles': normalized.roles, 'custom:tier': 'pilot' };
+      const token = `${Buffer.from('{}').toString('base64url')}.${Buffer.from(JSON.stringify(claims)).toString('base64url')}.synthetic-secret-signature`;
+      identities.set(token, normalized); return token;
+    },
     async deleteUser({ username }) { deleted.push(username); },
   };
   const fetchImpl = async (input, options = {}) => {
@@ -88,8 +97,11 @@ test('synthetic cloud smoke verifies payments, reversal, replay and isolation wi
   assert.equal(report.metrics.paidMinor, '75000');
   assert.equal(report.metrics.movements, 3);
   assert.equal(report.metrics.batches, 1);
-  assert.equal(cloud.created.length, 3);
-  assert.equal(cloud.deleted.length, 3);
+  assert.equal(cloud.created.length, 4);
+  assert.equal(cloud.deleted.length, 4);
+  assert.equal(cloud.created[3].organizationId, undefined);
+  assert.equal(cloud.created[3].roles, undefined);
+  assert.ok(report.checks.some(check => check.name === 'self_service_provisioning' && check.status === 'passed'));
   assert.equal(cloud.uploadCount(), 2);
   assert.ok(cloud.created.every((user) => user.username.endsWith('@example.test')));
   assert.doesNotMatch(JSON.stringify(report), /secret-token|secret-signed-url|password|private provider/);
@@ -107,7 +119,7 @@ test('cloud smoke cleans up users and hides a signed URL when upload transport f
   const cloud = syntheticCloud({ failUpload: true });
   const report = await runCloudSmoke({ stackName: 'saldoevento-dev', stackDescription: stack(), ...cloud });
   assert.equal(report.status, 'failed');
-  assert.equal(cloud.deleted.length, 3);
+  assert.equal(cloud.deleted.length, 4);
   assert.doesNotMatch(JSON.stringify(report), /secret-signed-url|private-signed-url/);
 });
 
@@ -125,6 +137,9 @@ test('Cognito adapter suppresses messages, sets a permanent password and request
   assert.equal(calls[1].input.Permanent, true);
   assert.equal(calls[2].input.AuthFlow, 'ADMIN_USER_PASSWORD_AUTH');
   assert.equal(calls[3].name, 'AdminDeleteUserCommand');
+  await adapter.createUser({ userPoolId: user.userPoolId, username: 'new-account@example.test' });
+  assert.equal(calls[4].input.MessageAction, 'SUPPRESS');
+  assert.equal(calls[4].input.UserAttributes.some(attribute => attribute.Name.startsWith('custom:')), false);
 });
 
 test('a failed temporary-user cleanup marks the smoke as failed even if all product checks pass', async () => {
@@ -132,7 +147,28 @@ test('a failed temporary-user cleanup marks the smoke as failed even if all prod
   cloud.cognito.deleteUser = async () => { throw new Error('provider diagnostic with private values'); };
   const report = await runCloudSmoke({ stackName: 'saldoevento-dev', stackDescription: stack(), ...cloud });
   assert.equal(report.status, 'failed');
-  assert.equal(report.cleanup.failures, 3);
+  assert.equal(report.cleanup.failures, 4);
   assert.ok(report.checks.some((check) => check.code === 'COGNITO_CLEANUP_FAILED'));
   assert.doesNotMatch(JSON.stringify(report), /provider diagnostic/);
+});
+
+test('testing smoke uses the exact testing stage and domain and still refuses production', async () => {
+  assert.deepEqual(parseArgs(['--stack','saldoevento-test']), { stack:'saldoevento-test', region:'us-east-1' });
+  assert.equal(validateCloudTarget('saldoevento-test', stack('test')).stage, 'test');
+  assert.throws(() => validateCloudTarget('saldoevento-test', stack()));
+  const cloud = syntheticCloud();
+  const report = await runCloudSmoke({ stackName:'saldoevento-test', stackDescription:stack('test'), ...cloud });
+  assert.equal(report.status,'passed');
+  assert.equal(report.environment,'testing');
+  assert.equal(report.origin,'https://saldoevento-test.lynxpardelle.com');
+  assert.equal(cloud.deleted.length,4);
+});
+
+test('self-service provisioning rejects a tenant not derived from the confirmed subject', async () => {
+  const cloud = syntheticCloud({ wrongRegistrationClaim:true });
+  const report = await runCloudSmoke({ stackName:'saldoevento-dev', stackDescription:stack(), ...cloud });
+  assert.equal(report.status,'failed');
+  assert.ok(report.checks.some(check => check.name === 'self_service_provisioning' && check.code === 'SELF_SERVICE_IDENTITY_MISMATCH'));
+  assert.equal(cloud.deleted.length,4);
+  assert.doesNotMatch(JSON.stringify(report),/synthetic-secret-signature/);
 });

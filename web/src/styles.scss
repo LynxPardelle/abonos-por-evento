@@ -1,3 +1,4 @@
+@use './app/features/marketing/marketing';
 @font-face { font-family:'DM Sans'; font-style:normal; font-weight:100 1000; font-display:swap; src:url('/fonts/dm-sans-variable.ttf') format('truetype'); }
 @font-face { font-family:'Manrope'; font-style:normal; font-weight:200 800; font-display:swap; src:url('/fonts/manrope-variable.ttf') format('truetype'); }
 :root { color-scheme: light; --ink:#1d302b; --muted:#697770; --green:#245c49; --line:#dce3de; --paper:#f7f9f6; }

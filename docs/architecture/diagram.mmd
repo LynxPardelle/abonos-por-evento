@@ -3,6 +3,12 @@ flowchart LR
   CDN --> SSR[Lambda Angular SSR]
   CDN --> Assets[S3 privado de assets]
   CDN --> API[HTTP API JWT]
+  Staff -->|Registro y acceso PKCE| Cognito[Cognito]
+  Cognito -->|PostConfirmation| Confirm[Lambda de confirmación]
+  Cognito -->|PreTokenGeneration V1| Token[Lambda de claims]
+  Confirm --> IdentityDB[DynamoDB Identidad]
+  Token --> IdentityDB
+  Cognito -->|ID token de la membresía| Staff
   API --> Events[Lambda Eventos]
   API --> Reconciliation[Lambda Conciliación]
   Events --> EventDB[DynamoDB Eventos]

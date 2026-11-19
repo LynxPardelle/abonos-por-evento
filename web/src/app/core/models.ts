@@ -10,4 +10,4 @@ export interface ImportBatch { batchId: string; fileName: string; status: string
 export interface Balance { participantId: string; paidMinor: string; agreedMinor: string; pendingMinor: string; currency: string; }
 export interface Movement { movementId: string; participantId: string; amountMinor: string; currency: string; kind: string; reversalOf?: string; createdAt?: string; }
 export interface BalancesResponse { version: number; balances: Balance[]; movements?: Movement[]; }
-export interface RuntimeConfig { mode: 'local' | 'cloud'; cognitoDomain: string; clientId: string; }
+export interface RuntimeConfig { mode: 'local' | 'cloud'; cognitoDomain: string; clientId: string; selfRegistrationEnabled?: boolean; }

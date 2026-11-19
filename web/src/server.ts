@@ -14,6 +14,7 @@ app.set('trust proxy', 1);
 app.get('/runtime-config.json', (_req, res) => {
   res.set('Cache-Control', 'no-store').json({
     mode: 'cloud',
+    selfRegistrationEnabled: process.env['SELF_REGISTRATION_ENABLED'] === 'true',
     cognitoDomain: process.env['COGNITO_DOMAIN'] ?? '',
     clientId: process.env['COGNITO_CLIENT_ID'] ?? '',
     region: process.env['AWS_REGION'] ?? '',

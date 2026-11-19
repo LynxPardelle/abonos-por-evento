@@ -10,6 +10,7 @@ SaldoEvento usa microservicios serverless en AWS con frontend Angular servido po
 | Eventos | Lambda HTTP y contrato interno IAM: eventos, participantes, moneda e importes acordados. | EventsTable en DynamoDB bajo demanda. |
 | Conciliación | Lambda HTTP: batches, confirmaciones idempotentes, ledger y saldos. | ReconciliationTable en DynamoDB bajo demanda. |
 | Importador | Lambda SQS del dominio Conciliación: valida CSV y huella, persiste filas y sugerencias; no aplica abonos. | Bucket S3 privado de entrada y tabla de Conciliación. |
+| Identidad | Triggers Cognito PostConfirmation y PreTokenGeneration V1: provisión idempotente y claims de organización/rol. | IdentityTable, por pool y sujeto. |
 | Salud | `GET /health`; acredita liveness, no disponibilidad de todas las dependencias. | Ninguno. |
 
 Eventos y Conciliación se comunican mediante un contrato de lectura explícito usando Lambda Invoke con IAM. Conciliación no puede leer ni escribir EventsTable. Compartir utilidades de validación no comparte la propiedad de los datos.
@@ -21,6 +22,10 @@ flowchart LR
   CDN -->|archivos versionados| Assets[S3 privado con OAC]
   CDN -->|/api/* sin caché| API[HTTP API JWT]
   Cognito[Cognito / OAuth PKCE] --> Browser
+  Cognito -->|PostConfirmation| Confirm[Lambda de confirmación]
+  Cognito -->|PreTokenGeneration V1| Token[Lambda de claims]
+  Confirm --> IdentityDB[(IdentityTable)]
+  Token --> IdentityDB
   API --> Events[Lambda Eventos]
   API --> Reconciliation[Lambda Conciliación]
   Events --> EventDB[(EventsTable)]
@@ -36,6 +41,8 @@ flowchart LR
 
 ## Angular servido mediante Lambda
 
+La ruta `/` devuelve el sitio comercial, `/registro` presenta el alta del piloto y `/app` abre el espacio operativo. Los enlaces profundos de `/eventos/{eventId}/...` se conservan. `/auth/callback` completa el intercambio de código y vuelve a `/app`. El ejemplo de la landing es ilustrativo; no consulta saldos privados ni se presenta como una métrica de clientes.
+
 `web/angular.json` construye salida `server`, no una publicación exclusivamente estática. `src/main.server.ts` arranca Angular con BootstrapContext; `src/server.ts` exporta Express `app` y el manejador Angular. `scripts/package-frontend.mjs` empaqueta los bundles y `serverless-http` en `artifacts/frontend` con manifiesto verificable.
 
 CloudFront usa Function URL `AWS_IAM` con Origin Access Control. La política de Lambda limita `InvokeFunctionUrl` e `InvokeFunction` a la distribución. El HTML y la configuración de acceso llevan `Cache-Control: no-store`; ningún token ni respuesta privada debe transferirse a otro usuario mediante caché SSR o HTTP. Los estáticos tienen origen S3 privado separado.
@@ -44,7 +51,13 @@ Se siguió el patrón existente del portafolio (`frontend-stack.js` y `tools/pac
 
 ## Identidad y autorización
 
-Cognito usa Authorization Code con PKCE, sin secreto de cliente. HTTP API verifica emisor y audiencia del JWT. Para esta versión, el cliente envía el ID token con `custom:organizationId` y `custom:roles`; ambos atributos los provisiona la administración, no el formulario del cliente. El servicio exige identidad y organización válidas y autoriza por rol. El cliente Cognito sólo puede escribir atributos públicos admitidos.
+Cognito usa Authorization Code con PKCE S256, sin secreto de cliente. La configuración pública expone si el registro está habilitado; el CTA lo respeta. `SelfRegistrationEnabled` es false por defecto y los parámetros de development/testing lo habilitan explícitamente. Producción permanece cerrada mientras `main` espera la aceptación del propietario. El cliente Cognito sólo puede escribir `email` y `name`, nunca organización o roles.
+
+PostConfirmation prepara la membresía después de confirmar la cuenta o recuperar la contraseña. PreTokenGeneration V1 obtiene o repara esa membresía antes de emitir el ID token. Una cuenta nueva con correo verificado recibe una organización derivada del pool y `sub`, rol `admin` dentro de esa organización y tier `pilot`. La creación DynamoDB condicional y la lectura consistente hacen idempotente el aprovisionamiento; `clientMetadata` y el formulario no eligen tenant, rol ni plan pagado.
+
+IdentityTable es la fuente de verdad. Los atributos protegidos de una cuenta administrativa anterior sólo se importan en su primer acceso; después, cambiar `custom:roles` en Cognito no modifica una membresía persistida. Una membresía suspendida o corrupta impide nuevos tokens. La API acepta tokens válidos hasta su caducidad de 15 minutos y no consulta la tabla en cada petición, por lo que no hay revocación inmediata de tokens ya emitidos. No existe una API pública de administración de membresías o invitaciones.
+
+HTTP API verifica emisor y audiencia. El backend exige el ID token con `custom:organizationId` y `custom:roles` emitidos por el servidor y autoriza cada recurso por rol. Los triggers sólo pueden invocarse por Cognito con el ARN del pool y la cuenta esperados; sus roles IAM sólo leen/escriben IdentityTable y no acceden a tablas financieras. [Detalles de Identidad](../../services/identity/README.md).
 
 | Rol | Lectura | Importar | Confirmar/reversar | Crear eventos/participantes |
 | --- | --- | --- | --- | --- |
@@ -54,7 +67,9 @@ Cognito usa Authorization Code con PKCE, sin secreto de cliente. HTTP API verifi
 | confirmer | Sí | No | Sí | No |
 | auditor | Sí | No | No | No |
 
-Cada clave de almacenamiento incluye organización y evento. Una solicitud HTTP no puede convertirse en invocación interna mediante su JSON. La autenticación local sintética existe únicamente en `scripts/local-api.mjs`, enlazada a loopback; no forma parte de los handlers Lambda.
+Las claves de negocio de Eventos y Conciliación incluyen organización y evento; las de Identidad incorporan pool y sujeto, en una tabla física por stack. Una solicitud HTTP no puede convertirse en invocación interna mediante su JSON. La autenticación local sintética existe únicamente en `scripts/local-api.mjs`, enlazada a loopback; no forma parte de los handlers Lambda ni crea cuentas Cognito.
+
+El campo tier del piloto es metadato de la membresía, no un motor de cuotas ni facturación. [PLANES.md](../PLANES.md) conserva las propuestas comerciales; los entitlements, las invitaciones y Stripe permanecen pendientes y no se activan desde las tarjetas de la landing.
 
 ## Dinero, idempotencia e importaciones
 
@@ -74,4 +89,6 @@ SQS entrega al menos una vez. La idempotencia admite replay y el worker usa Repo
 | test | testing | https://saldoevento-test.lynxpardelle.com |
 | prod | main | https://saldoevento.lynxpardelle.com |
 
-`infra/template.yaml` declara el subdominio y Route53/ACM mediante parámetros. CloudFront requiere el certificado en us-east-1. Las ramas se elevan **development → testing → main**. La existencia de plantillas o URLs previstas no acredita despliegue ni operación; el reporte de verificación distingue pruebas locales y cloud.
+`infra/template.yaml` declara el subdominio y Route53/ACM mediante parámetros. CloudFront requiere el certificado en us-east-1. La entrega pasa por PR **feature → development → testing**, con merge commits en la promoción y verificaciones sobre el HEAD esperado. `scripts/Deploy-Testing.ps1` exige el commit remoto promovido y un artefacto con checksums coincidentes. [Procedimiento de testing](../runbooks/testing-promotion.md).
+
+La existencia de una plantilla o URL prevista no acredita despliegue. Los resultados de esta entrega se consultan en los PR, CI y reportes `artifacts/deployments/{dev,test}/cloud-smoke.json`. El historial documentado de la base anterior permanece separado. **No se promueve a `main` ni se publica producción hasta la prueba del propietario con su cuenta y una instrucción posterior.**

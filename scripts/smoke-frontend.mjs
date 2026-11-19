@@ -11,7 +11,7 @@ const eventFor = path => ({
   requestContext: { accountId: 'anonymous', apiId: 'local-smoke', domainName: 'function.lambda-url.us-east-1.on.aws', domainPrefix: 'function', http: { method: 'GET', path, protocol: 'HTTP/1.1', sourceIp: '127.0.0.1', userAgent: 'SaldoEvento synthetic SSR smoke' }, requestId: 'synthetic', routeKey: '$default', stage: '$default', timeEpoch: Date.now() },
   isBase64Encoded: false,
 });
-for (const route of ['/', '/eventos/synthetic/asistentes', '/auth/callback']) {
+for (const route of ['/', '/registro', '/app', '/eventos/synthetic/asistentes', '/auth/callback']) {
   const response = await handler(eventFor(route), {});
   const body = response.isBase64Encoded ? Buffer.from(response.body, 'base64').toString() : response.body;
   assert.equal(response.statusCode, 200, `${route}: ${body.slice(0, 200)}`);
@@ -24,7 +24,7 @@ assert.equal(config.statusCode, 200);
 assert.equal(JSON.parse(config.body).mode, 'cloud');
 const api = await handler(eventFor('/api/v1/events'), {});
 assert.equal(api.statusCode, 404);
-console.log(JSON.stringify({ product: 'SaldoEvento', frontendLambda: 'passed', htmlRoutes: 3, configuration: 'cloud', hostOverride: 'rejected', cache: 'no-store' }, null, 2));
+console.log(JSON.stringify({ product: 'SaldoEvento', frontendLambda: 'passed', htmlRoutes: 5, configuration: 'cloud', hostOverride: 'rejected', cache: 'no-store' }, null, 2));
 
 }
 main().catch(error => { console.error(error.message); process.exitCode = 1; });

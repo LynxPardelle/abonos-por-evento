@@ -23,6 +23,13 @@ Parameters:
     Default: ""
     AllowedPattern: ^$|^https://[a-z0-9][a-z0-9.-]*[a-z0-9]$
     Description: Origen HTTPS sin slash. Vacio usa dominio de producto del ambiente.
+  SelfRegistrationEnabled:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: Habilita el alta con correo verificado y una organizacion propia. Mantener false en produccion hasta aprobar su lanzamiento.
 Mappings:
   Environments:
     dev:
@@ -32,10 +39,15 @@ Mappings:
     prod:
       DomainName: saldoevento.lynxpardelle.com
 Conditions:
-  IsDevelopment:
+  IsNonProduction:
+    Fn::Not:
+      - Fn::Equals:
+          - Ref: Stage
+          - prod
+  SelfRegistrationAllowed:
     Fn::Equals:
-      - Ref: Stage
-      - dev
+      - Ref: SelfRegistrationEnabled
+      - "true"
   HasPublicOrigin:
     Fn::Not:
       - Fn::Equals:
@@ -69,6 +81,125 @@ Globals:
       Environment:
         Ref: Stage
 Resources:
+  IdentityTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Product
+          Value: SaldoEvento
+        - Key: Domain
+          Value: Identity
+  IdentityConfirmationLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName:
+        Fn::Sub: /aws/lambda/saldoevento-${Stage}-identity-confirmation
+      RetentionInDays: 14
+  IdentityTokenLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName:
+        Fn::Sub: /aws/lambda/saldoevento-${Stage}-identity-token
+      RetentionInDays: 14
+  IdentityConfirmationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: saldoevento-${Stage}-identity-confirmation
+      CodeUri: ../services/
+      Handler: identity/post-confirmation.handler
+      Timeout: 5
+      Environment:
+        Variables:
+          IDENTITY_TABLE:
+            Ref: IdentityTable
+          SELF_REGISTRATION_ENABLED:
+            Ref: SelfRegistrationEnabled
+      LoggingConfig:
+        LogFormat: JSON
+        LogGroup:
+          Ref: IdentityConfirmationLogGroup
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+              Resource:
+                Fn::GetAtt:
+                  - IdentityTable
+                  - Arn
+  IdentityTokenFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: saldoevento-${Stage}-identity-token
+      CodeUri: ../services/
+      Handler: identity/pre-token.handler
+      Timeout: 5
+      Environment:
+        Variables:
+          IDENTITY_TABLE:
+            Ref: IdentityTable
+          SELF_REGISTRATION_ENABLED:
+            Ref: SelfRegistrationEnabled
+      LoggingConfig:
+        LogFormat: JSON
+        LogGroup:
+          Ref: IdentityTokenLogGroup
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+              Resource:
+                Fn::GetAtt:
+                  - IdentityTable
+                  - Arn
+  IdentityConfirmationFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName:
+        Ref: IdentityConfirmationFunction
+      Action: lambda:InvokeFunction
+      Principal: cognito-idp.amazonaws.com
+      SourceArn:
+        Fn::GetAtt:
+          - UserPool
+          - Arn
+      SourceAccount:
+        Ref: AWS::AccountId
+  IdentityTokenFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName:
+        Ref: IdentityTokenFunction
+      Action: lambda:InvokeFunction
+      Principal: cognito-idp.amazonaws.com
+      SourceArn:
+        Fn::GetAtt:
+          - UserPool
+          - Arn
+      SourceAccount:
+        Ref: AWS::AccountId
   UserPool:
     Type: AWS::Cognito::UserPool
     DeletionPolicy: Retain
@@ -81,7 +212,22 @@ Resources:
       AutoVerifiedAttributes:
         - email
       AdminCreateUserConfig:
-        AllowAdminCreateUserOnly: true
+        AllowAdminCreateUserOnly:
+          Fn::If:
+            - SelfRegistrationAllowed
+            - false
+            - true
+      LambdaConfig:
+        PostConfirmation:
+          Fn::GetAtt:
+            - IdentityConfirmationFunction
+            - Arn
+        PreTokenGenerationConfig:
+          LambdaArn:
+            Fn::GetAtt:
+              - IdentityTokenFunction
+              - Arn
+          LambdaVersion: V1_0
       AccountRecoverySetting:
         RecoveryMechanisms:
           - Name: verified_email
@@ -138,7 +284,7 @@ Resources:
         - ALLOW_USER_SRP_AUTH
         - ALLOW_REFRESH_TOKEN_AUTH
         - Fn::If:
-            - IsDevelopment
+            - IsNonProduction
             - ALLOW_ADMIN_USER_PASSWORD_AUTH
             - Ref: AWS::NoValue
       AccessTokenValidity: 15
@@ -723,6 +869,8 @@ Resources:
             Fn::Sub: https://${UserPoolDomain}.auth.${AWS::Region}.amazoncognito.com
           COGNITO_CLIENT_ID:
             Ref: UserPoolClient
+          SELF_REGISTRATION_ENABLED:
+            Ref: SelfRegistrationEnabled
           NG_ALLOWED_HOSTS:
             Fn::Join:
               - ","
@@ -1067,6 +1215,9 @@ Resources:
         HostedZoneId: Z2FDTNDATAQYW2
         EvaluateTargetHealth: false
 Outputs:
+  IdentityTableName:
+    Value:
+      Ref: IdentityTable
   FrontendUrl:
     Value:
       Fn::Sub: https://${FrontendDistribution.DomainName}

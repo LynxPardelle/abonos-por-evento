@@ -68,3 +68,27 @@ test('domain configuration maps development, testing and production without fabr
   assert.equal(template.Parameters.HostedZoneId.Default, '');
   assert.equal(template.Parameters.CertificateArn.Default, '');
 });
+
+test('self-registration provisions server-owned membership with source-scoped Cognito triggers', () => {
+  assert.equal(template.Parameters.SelfRegistrationEnabled.Default, 'false');
+  assert.deepEqual(template.Parameters.SelfRegistrationEnabled.AllowedValues, ['true', 'false']);
+  assert.deepEqual(resources.UserPool.Properties.AdminCreateUserConfig.AllowAdminCreateUserOnly, { 'Fn::If': ['SelfRegistrationAllowed', false, true] });
+  assert.deepEqual(resources.UserPool.Properties.LambdaConfig.PostConfirmation, { 'Fn::GetAtt': ['IdentityConfirmationFunction', 'Arn'] });
+  assert.equal(resources.UserPool.Properties.LambdaConfig.PreTokenGenerationConfig.LambdaVersion, 'V1_0');
+  assert.equal(resources.IdentityTable.Properties.BillingMode, 'PAY_PER_REQUEST');
+  assert.equal(resources.IdentityTable.Properties.SSESpecification.SSEEnabled, true);
+  assert.equal(resources.IdentityTable.DeletionPolicy, 'Retain');
+  for (const name of ['IdentityConfirmationFunction', 'IdentityTokenFunction']) {
+    const properties = resources[name].Properties;
+    assert.deepEqual(properties.Environment.Variables.IDENTITY_TABLE, { Ref: 'IdentityTable' });
+    const policy = JSON.stringify(properties.Policies);
+    assert.ok(!policy.includes('EventsTable') && !policy.includes('ReconciliationTable'));
+    assert.ok(!policy.includes('cognito-idp:AdminUpdateUserAttributes'));
+    const permission = resources[`${name}Permission`].Properties;
+    assert.equal(permission.Principal, 'cognito-idp.amazonaws.com');
+    assert.deepEqual(permission.SourceArn, { 'Fn::GetAtt': ['UserPool', 'Arn'] });
+    assert.deepEqual(permission.SourceAccount, { Ref: 'AWS::AccountId' });
+  }
+  const adminFlow = resources.UserPoolClient.Properties.ExplicitAuthFlows.find(flow => typeof flow === 'object');
+  assert.equal(adminFlow['Fn::If'][0], 'IsNonProduction', 'Only dev/test may enable the IAM-only administrative smoke flow');
+});

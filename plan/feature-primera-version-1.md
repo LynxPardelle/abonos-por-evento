@@ -1,6 +1,6 @@
 ---
 goal: Primera versión de SaldoEvento en microservicios AWS con Angular Lambda
-version: '2.0'
+version: '3.0'
 date_created: 2026-11-17
 last_updated: 2026-11-19
 status: 'In progress'
@@ -9,16 +9,20 @@ tags: [feature, architecture, serverless, angular]
 
 # Introduction
 
-Estado **In progress**. El producto adopta SaldoEvento y una arquitectura de microservicios serverless con Angular SSR servido por Lambda. Las implementaciones locales tienen pruebas; las validaciones AWS y la aceptación de un organizador se registran separadamente. La promoción es **development → testing → main**.
+Estado **In progress**. El producto adopta SaldoEvento y una arquitectura de microservicios serverless con Angular SSR servido por Lambda. La base operativa tiene su evidencia histórica de AWS; la nueva entrega añade landing, registro self-service, diseño comercial y herramientas de promoción a testing. La implementación local aprobó 86 pruebas Node, 15 Angular y build SSR. La ejecución remota se acredita en PR, CI y reportes del ambiente; esos resultados locales no la sustituyen. La promoción es **feature → development → testing**. `main` queda pendiente hasta la prueba del propietario con su cuenta y una instrucción posterior.
 
 ## 1. Requirements & Constraints
 
 - **REQ-001** Crear evento y participantes; importar CSV; revisar evidencia; confirmar abonos; consultar saldos; reversar conservando el original. Admitir también abono manual con comprobante de referencia única.
 - **REQ-002** Usar la marca SaldoEvento y los subdominios saldoevento-dev, saldoevento-test y saldoevento bajo lynxpardelle.com.
+- **REQ-003** Publicar el sitio comercial en `/`, la pantalla de alta en `/registro` y el espacio operativo en `/app`; conservar enlaces profundos a eventos y callback PKCE.
+- **REQ-004** Ofrecer un piloto sin tarjeta y presentar Por Evento, Organizador y Equipo como propuestas en diseño, sin precios ni cobros activos.
 - **SEC-001** HTTP API verifica JWT Cognito; los servicios comprueban identidad, organización y rol. El cliente no puede modificar organización ni roles. El dominio Eventos posee una tabla y Conciliación otra.
 - **SEC-002** S3 privado cifrado, URL PUT con checksum esperado, SQS con DLQ y fallos parciales. No registrar tokens, referencias completas ni CSV en logs.
+- **SEC-003** El registro exige correo verificado y membresía asignada por servidor. PostConfirmation/PreToken usan IdentityTable por pool/sujeto, creación condicional y claims no elegibles por cliente. La membresía persistida es autoritativa y los tokens vigentes caducan en 15 minutos.
 - **CON-001** Importes enteros transmitidos como cadenas; una moneda por evento (MXN/USD/EUR). Reintentos conservan el resultado o devuelven conflicto si cambia la solicitud. Las escrituras concurrentes usan versión.
 - **CON-002** Los ejemplos y los pilotos automáticos usan datos sintéticos. La aceptación con datos de un organizador requiere su escenario autorizado.
+- **CON-003** Stripe, Checkout, entitlements pagados, precios e invitaciones de equipo permanecen pendientes. Un registro no contrata un tier futuro ni programa un cargo.
 - **PAT-001** Angular standalone, rutas lazy, Signal Forms y SignalStore por flujo. Frontend SSR/Express en Lambda, Function URL IAM y CloudFront OAC; assets S3 privado y API sin caché.
 - **PAT-002** Desarrollo sigue development, pruebas testing y producción main. La implementación se prepara en una rama feature basada en development y no cambia la rama main del checkout original.
 
@@ -57,7 +61,7 @@ Estado **In progress**. El producto adopta SaldoEvento y una arquitectura de mic
 | Task | Description | Completed | Date |
 | --- | --- | --- | --- |
 | TASK-003 | Implementar rutas de eventos, participantes/saldos, importaciones y movimientos en web/src/app/features/workspace; SignalStore por ruta, servicios HTTP y acceso PKCE. Mostrar evidencia, confirmación explícita, errores de lote y progreso; recargar desde backend sin aplicar sugerencias automáticamente. | Implementado; recorrido navegador verificado | 2026-11-19 |
-| TASK-010 | Construir SSR, empaquetar artifacts/frontend con serverless-http y manifiesto con hashes, probar el handler Lambda real y validar host/caché. Añadir CI sin despliegue automático. | Completado; SSR local y AWS aprobados | 2026-11-19 |
+| TASK-010 | Construir SSR, empaquetar artifacts/frontend con serverless-http y manifiesto con hashes, probar el handler Lambda real y validar host/caché. Añadir CI sin despliegue automático. | Base SSR aprobada local/AWS; la entrega nueva se acredita en TASK-014 | 2026-11-19 |
 
 ### Implementation Phase 5
 
@@ -66,8 +70,35 @@ Estado **In progress**. El producto adopta SaldoEvento y una arquitectura de mic
 | Task | Description | Completed | Date |
 | --- | --- | --- | --- |
 | TASK-004 | Ejecutar services/reconciliation/pilot.mjs con CSV sintético: dos abonos, reverso, referencia ambigua, fila rechazada, duplicado y fallo/replay simulado. Esperar 75000 unidades menores MXN y cero discrepancias; ejecutar también el recorrido HTTP local y navegador con recarga. | Piloto sintético local aprobado | 2026-11-19 |
-| TASK-008 | Revisar y ejecutar change set nuevo saldoevento-dev mediante Deploy-Development.ps1; publicar assets; ejecutar smoke-cloud.mjs con usuarios temporales sintéticos y correos suprimidos. Verificar Cognito/JWT, IAM, DynamoDB, S3 checksum, SQS, ledger, tenant y roles. Guardar reporte sanitizado en docs/verificacion/development-2026-11-19.json. | Completado en AWS development; 12 checks aprobados | 2026-11-19 |
-| TASK-009 | Provisionar usuario real/organización, ejecutar escenario autorizado del organizador, revisar cierre/métricas/alertas y promover PR development → testing → main. Publicar saldoevento.lynxpardelle.com después de verificación de testing. | Pendiente | |
+| TASK-008 | Verificar la base de conciliación en AWS development: change set, assets, Cognito/JWT, IAM, DynamoDB, S3 checksum, SQS, ledger, tenant y roles. Conservar el reporte histórico docs/verificacion/development-2026-11-19.json; la nueva entrega se acredita por TASK-014. | Base anterior completada en AWS development; 12 checks históricos aprobados | 2026-11-19 |
+
+### Implementation Phase 6
+
+**GOAL-006** Sitio comercial y registro del piloto.
+
+| Task | Description | Completed | Date |
+| --- | --- | --- | --- |
+| TASK-011 | Implementar landing `/`, recorrido ilustrativo, funciones actuales, preguntas y CTA a `/registro`; mantener `/app` y enlaces operativos. Verificar SSR, rutas, controles y estados de registro con pruebas Angular. | Completado localmente; build y pruebas aprobados | 2026-11-19 |
+| TASK-012 | Implementar services/identity con IdentityTable, PostConfirmation y PreTokenGeneration V1; derivar organización/rol servidor, ignorar clientMetadata, verificar correo, idempotencia y aislamiento. Añadir signup Cognito, flag público y callback PKCE a `/app`. | Completado localmente; pruebas de identidad y Session aprobadas | 2026-11-19 |
+| TASK-013 | Diseñar Piloto/Por Evento/Organizador/Equipo en docs/PLANES.md, separar capacidades presentes de propuestas, definir hipótesis de cuotas y criterios para vender. No publicar precios ni activar Stripe o planes pagados. | Completado como diseño; no hay venta ni cuotas comerciales activas | 2026-11-19 |
+
+### Implementation Phase 7
+
+**GOAL-007** Entrega verificable de development a testing.
+
+| Task | Description | Completed | Date |
+| --- | --- | --- | --- |
+| TASK-014 | Subir la rama feature, crear e integrar PR a development tras comprobar su HEAD; promover development → testing con merge commit y checks. Usar Deploy-Testing.ps1 con commit remoto/artefacto verificados y change set revisado; probar landing/registro y smoke-testing.mjs con cuentas sintéticas y limpieza. | Herramientas implementadas y probadas localmente; ejecución y resultados se acreditan en los enlaces/reportes de entrega | 2026-11-19 |
+
+Estado remoto de TASK-014: [PR a development](https://github.com/LynxPardelle/abonos-por-evento/pulls?q=is%3Apr+base%3Adevelopment), [PR a testing](https://github.com/LynxPardelle/abonos-por-evento/pulls?q=is%3Apr+base%3Atesting) y [CI](https://github.com/LynxPardelle/abonos-por-evento/actions/workflows/ci.yml). Los reportes del commit desplegado se guardan en `artifacts/deployments/dev/cloud-smoke.json` y `artifacts/deployments/test/cloud-smoke.json`. [Procedimiento y criterios de cierre](../docs/runbooks/testing-promotion.md). No se infiere aprobación cloud de las pruebas locales ni del historial de la base anterior.
+
+### Implementation Phase 8
+
+**GOAL-008** Aceptación de la cuenta real antes de main.
+
+| Task | Description | Completed | Date |
+| --- | --- | --- | --- |
+| TASK-009 | El propietario completa registro, recepción de correo, acceso PKCE y escenario autorizado con su cuenta en testing. Revisar resultados y operación; esperar una instrucción posterior antes de promover a main o publicar saldoevento.lynxpardelle.com. | Pendiente de prueba humana; main se mantiene pendiente | |
 
 ## 3. Alternatives
 
@@ -88,6 +119,8 @@ Estado **In progress**. El producto adopta SaldoEvento y una arquitectura de mic
 - **FILE-003** web/src/app/core, features/workspace, server.ts, main.server.ts y configuración SSR.
 - **FILE-004** scripts/package-frontend.mjs, validate-infra.mjs, local-api.mjs, smoke-frontend.mjs, smoke-cloud.mjs y Deploy-Development.ps1.
 - **FILE-005** docs/CONTRATO.md, OPERACION.md y VERIFICACION.md; workflow CI y controles de promoción existentes.
+- **FILE-006** services/identity y web/src/app/core/session.ts; landing/registro en web/src/app/features/marketing y rutas `/`, `/registro`, `/app`.
+- **FILE-007** docs/PLANES.md, diseño comercial, scripts/Deploy-Testing.ps1, scripts/smoke-testing.mjs y docs/runbooks/testing-promotion.md.
 
 ## 6. Testing
 
@@ -95,12 +128,16 @@ Estado **In progress**. El producto adopta SaldoEvento y una arquitectura de mic
 - **TEST-002** npm run test:web: dinero exacto, estado Angular, errores y sesión. Recorrido navegador confirma que un abono requiere revisión y el saldo persiste tras recarga del cliente.
 - **TEST-003** npm run build:web; package:frontend; smoke:frontend; validate:infra; cfn-lint de ambos templates.
 - **TEST-004** Smoke AWS development debe acreditar configuración, HTML, autenticación y datos reales de servicios con registros exclusivamente sintéticos. Distinguir fallo/replay simulado de prueba de DLQ real.
+- **TEST-005** La entrega de landing/registro cuenta con 86 pruebas Node, 15 Angular y build SSR aprobados localmente. La CI debe repetir las verificaciones para el HEAD que se integre.
+- **TEST-006** Smoke dev/test valida una cuenta sin atributos administrativos: organización derivada por servidor, admin de su propio tenant y piloto; comprueba aislamiento, flujo de conciliación y retirada de identidades temporales. La entrega real del correo y el recorrido de la persona se reservan a TASK-009.
 
 ## 7. Risks & Assumptions
 
 - **RISK-001** Límite del piloto: CSV de 1 MiB/500 filas y batch serializado de 300000 bytes. Un lote mayor debe dividirse; los errores quedan visibles.
 - **RISK-002** Consultas de ledger y participantes cargan el conjunto del evento en memoria; una escala superior al piloto requiere paginación pública y proyecciones de consulta más específicas.
 - **RISK-003** La marca se eligió con búsqueda pública editorial; no se afirma exclusividad registral. El repositorio remoto conserva su nombre técnico histórico.
+- **RISK-004** Una modificación de atributos legacy Cognito no revoca una membresía persistida; se administra en IdentityTable. Los ID tokens emitidos pueden conservar acceso hasta 15 minutos.
+- **RISK-005** Los tiers pagados son diseño: sus cuotas, exportación, invitaciones, ciclo de cierre y facturación requieren implementación/validación antes de ofrecerse como prestaciones.
 - **ASSUMPTION-001** Un organizador aportará un escenario y datos autorizados para aceptación. El piloto sintético y un despliegue dev no sustituyen esa aceptación.
 - **ASSUMPTION-002** Los cambios en producción siguen la promoción por ramas y no forman parte de una publicación directa desde feature.
 
@@ -111,3 +148,7 @@ Estado **In progress**. El producto adopta SaldoEvento y una arquitectura de mic
 - [Contrato](../docs/CONTRATO.md)
 - [Operación](../docs/OPERACION.md)
 - [Decisión de diseño](../docs/architecture/2026-11-19-saldoevento-design.md)
+- [Sitio comercial y registro](../docs/architecture/2026-11-19-commercial-site-design.md)
+- [Planes propuestos](../docs/PLANES.md)
+- [Identidad](../services/identity/README.md)
+- [Promoción y verificación testing](../docs/runbooks/testing-promotion.md)

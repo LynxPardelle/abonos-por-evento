@@ -6,7 +6,7 @@ import { routes } from './app.routes';
 describe('SaldoEvento', () => {
   it('identifies the product and keeps operational routes available', async () => {
     TestBed.configureTestingModule({ providers: [provideRouter(routes)] });
-    const harness = await RouterTestingHarness.create('/');
+    const harness = await RouterTestingHarness.create('/app');
     const page = harness.routeNativeElement;
 
     expect(page?.textContent ?? '').toContain('SaldoEvento');

@@ -10,7 +10,7 @@
   <aside class="sidebar">
     <p class="eyebrow">ESPACIO DE TRABAJO</p>
     <nav aria-label="Navegación principal">
-      <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }"><span aria-hidden="true">▦</span> Mis eventos</a>
+      <a routerLink="/app" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }"><span aria-hidden="true">▦</span> Mis eventos</a>
       @if (store.eventId()) {
         <div class="event-nav"><p>{{ store.event()?.name ?? 'Evento' }}</p>
           <a [routerLink]="['/eventos', store.eventId(), 'asistentes']" routerLinkActive="active">Participantes y saldos</a>

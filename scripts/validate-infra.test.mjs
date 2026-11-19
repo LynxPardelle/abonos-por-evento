@@ -58,3 +58,13 @@ test('unknown cache policy IDs are rejected in every CloudFront behavior', async
   distribution.CacheBehaviors.find((behavior) => behavior.TargetOriginId === 'assets').CachePolicyId = '00000000-0000-0000-0000-000000000000';
   assert.ok(validate(invalid).some((error) => /CachePolicyKnown/.test(error)), 'A syntactically valid UUID must not bypass managed-policy validation');
 });
+
+test('registration cannot bypass protected membership provisioning or its Cognito source boundary', async () => {
+  const validate = await validator();
+  const invalid = structuredClone(template);
+  invalid.Resources.IdentityTokenFunctionPermission.Properties.SourceArn = '*';
+  invalid.Resources.UserPool.Properties.LambdaConfig.PreTokenGenerationConfig.LambdaVersion = 'V2_0';
+  const errors = validate(invalid);
+  assert.ok(errors.some(error => /source-scoped.*Cognito/i.test(error)));
+  assert.ok(errors.some(error => /pre-token.*V1_0/i.test(error)));
+});

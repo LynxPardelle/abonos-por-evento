@@ -19,14 +19,25 @@ export function validateInfrastructure(template) {
   const api = properties('BusinessApi');
   const client = properties('UserPoolClient');
   const distribution = properties('FrontendDistribution').DistributionConfig ?? {};
-  const functions = ['EventsFunction', 'ReconciliationFunction', 'ImportWorkerFunction', 'FrontendFunction'];
+  const functions = ['EventsFunction', 'ReconciliationFunction', 'ImportWorkerFunction', 'FrontendFunction', 'IdentityConfirmationFunction', 'IdentityTokenFunction'];
   for (const name of functions) require(resources[name]?.Type === 'AWS::Serverless::Function', `${name} must be a separate Lambda.`);
   require(template?.Globals?.Function?.Runtime === 'nodejs24.x', 'Lambdas must use the supported Node.js 24 runtime.');
   require(api.Auth?.DefaultAuthorizer === 'CognitoJwt', 'Business API must require JWT by default.');
   const manualPayment = Object.values(properties('ReconciliationFunction').Events ?? {}).find((event) => event.Properties?.Path === '/api/v1/events/{eventId}/payments' && event.Properties.Method === 'POST');
   require(manualPayment && manualPayment.Properties.ApiId?.Ref === 'BusinessApi' && !['NONE', 'AWS_IAM'].includes(manualPayment.Properties.Auth?.Authorizer), 'Manual payments must use the JWT-authenticated business API.');
   require(properties('HealthFunction').Events?.HealthRoute?.Properties?.Auth?.Authorizer === 'NONE', 'Health endpoint must explicitly remain public.');
-  require(properties('UserPool').AdminCreateUserConfig?.AllowAdminCreateUserOnly === true, 'Pilot users must be provisioned by an administrator.');
+  require(template?.Parameters?.SelfRegistrationEnabled?.Default === 'false', 'Self-registration must stay disabled until its environment explicitly enables it.');
+  require(JSON.stringify(properties('UserPool').AdminCreateUserConfig?.AllowAdminCreateUserOnly) === JSON.stringify({ 'Fn::If': ['SelfRegistrationAllowed', false, true] }), 'Self-registration must follow its explicit environment condition.');
+  const identityConfiguration = properties('UserPool').LambdaConfig ?? {};
+  require(identityConfiguration.PostConfirmation?.['Fn::GetAtt']?.[0] === 'IdentityConfirmationFunction', 'Registration must provision membership after Cognito confirmation.');
+  require(identityConfiguration.PreTokenGenerationConfig?.LambdaVersion === 'V1_0' && identityConfiguration.PreTokenGenerationConfig?.LambdaArn?.['Fn::GetAtt']?.[0] === 'IdentityTokenFunction', 'The pre-token trigger must issue server-owned ID claims through V1_0.');
+  for (const name of ['IdentityConfirmationFunction', 'IdentityTokenFunction']) {
+    require(properties(name).Environment?.Variables?.IDENTITY_TABLE?.Ref === 'IdentityTable', `${name} must own membership in the Identity table.`);
+    const permission = properties(`${name}Permission`);
+    require(permission.Principal === 'cognito-idp.amazonaws.com' && permission.SourceArn?.['Fn::GetAtt']?.[0] === 'UserPool' && permission.SourceAccount?.Ref === 'AWS::AccountId', `${name} must have source-scoped Cognito invocation permission.`);
+    const policy = JSON.stringify(properties(name).Policies);
+    require(!policy.includes('EventsTable') && !policy.includes('ReconciliationTable') && !policy.includes('cognito-idp:AdminUpdateUserAttributes'), `${name} must not gain business storage or user-attribute administration rights.`);
+  }
   require(Array.isArray(client.WriteAttributes) && !client.WriteAttributes.some((attribute) => attribute.startsWith('custom:')), 'Authorization custom claims must never be user-writable.');
   require(client.ReadAttributes?.includes('custom:organizationId') && client.ReadAttributes?.includes('custom:roles'), 'Identity token must expose the organization and role claims.');
 
@@ -36,7 +47,7 @@ export function validateInfrastructure(template) {
     require(service.Environment?.Variables?.RECONCILIATION_TABLE?.Ref === 'ReconciliationTable', `${name} must own its own table within Reconciliation.`);
     require(!JSON.stringify(service.Policies).includes('EventsTable'), `${name} must read Events through the service boundary.`);
   }
-  for (const name of ['EventsTable', 'ReconciliationTable']) {
+  for (const name of ['EventsTable', 'ReconciliationTable', 'IdentityTable']) {
     require(properties(name).BillingMode === 'PAY_PER_REQUEST', `${name} must use on-demand capacity.`);
     require(properties(name).SSESpecification?.SSEEnabled === true, `${name} must use encryption at rest.`);
     require(resources[name]?.DeletionPolicy === 'Retain', `${name} must preserve data on stack deletion.`);
