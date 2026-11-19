@@ -22,7 +22,7 @@ test('Dynamo transaction atomically appends movement, advances version, updates 
   assert.ok(entries.every(({ Put }) => Put.TableName === 'reconciliation-test' && Put.Item.pk === pk));
   const metadata = entries.find(({ Put }) => Put.Item.sk === 'LEDGER').Put;
   assert.equal(metadata.ExpressionAttributeValues[':previous'], 1);
-  assert.deepEqual(metadata.Item.data, { version: 2, currency: 'MXN' });
+  assert.deepEqual(metadata.Item.data, { version: 2, currency: 'MXN', financialStatus: 'open', lifecycleVersion: 0 });
   assert.equal(Object.hasOwn(metadata.Item.data, 'movements'), false);
   const movement = entries.find(({ Put }) => Put.Item.sk.startsWith('MOVEMENT#')).Put;
   assert.equal(movement.Item.data.operationId, 'second');

@@ -1,6 +1,8 @@
 # Planes de SaldoEvento
 
-**Estado: diseño comercial del 19 de noviembre de 2026.** El piloto puede usarse sin tarjeta cuando el registro esté habilitado en el ambiente. Por Evento, Organizador y Equipo son propuestas para validar; no están a la venta, no activan suscripciones y no tienen un precio aprobado.
+**Estado al 19 de noviembre de 2026.** El piloto de `main` `05b02f31563d88285d22b5085d69d3ba757e6675`, publicado mediante el [PR #10](https://github.com/LynxPardelle/abonos-por-evento/pull/10), está disponible en https://saldoevento.lynxpardelle.com y fue validado con una cuenta real de producción. Stripe y Checkout permanecen desactivados.
+
+El nuevo incremento de catálogo, derechos de uso, cierre, plantillas y Equipo está **implementado y probado localmente; todavía no está desplegado**. Su código no acredita disponibilidad en producción. Por Evento, Organizador y Equipo se pueden preparar para evaluación manual mediante IAM, sin compra, cargos o suscripción. No tienen precio aprobado.
 
 ## Qué se está vendiendo
 
@@ -10,7 +12,7 @@ El modelo conserva dos caminos: una contratación por evento para quien organiza
 
 ## Disponible en el piloto
 
-Estas capacidades están implementadas en el núcleo y la interfaz. Su publicación y el registro se verifican por ambiente antes de anunciarlos como disponibles:
+La versión publicada del piloto incluye:
 
 - Eventos y participantes con un importe acordado y una moneda por evento: MXN, USD o EUR.
 - Importación CSV, sugerencias de coincidencia y filas ambiguas o rechazadas visibles.
@@ -19,76 +21,82 @@ Estas capacidades están implementadas en el núcleo y la interfaz. Su publicaci
 - Protección contra operaciones repetidas y escrituras concurrentes.
 - Aislamiento por organización y autorización del backend por roles.
 
-El registro nuevo debe crear una organización propia desde el servidor. El piloto no incluye una interfaz de invitaciones, cambio de plan, cobro, factura comercial ni conexión bancaria automática. Los roles existentes en la API no equivalen a una función comercial de invitar un equipo.
+El registro verificado crea una organización propia desde el servidor. Una cuenta nueva de producción es independiente de las cuentas y organizaciones de testing. El piloto publicado no incluye invitaciones, cambio autónomo de plan, cobro, factura comercial ni conexión bancaria automática.
 
-**Límites técnicos actuales:** cada CSV admite hasta 1 MiB y 500 filas. El detalle serializado de un batch se limita a 300000 bytes. Esto no limita por sí mismo el número de eventos, participantes totales o importaciones de una organización. No hay cuotas comerciales ni un servicio de entitlements implementados; tampoco debe describirse el piloto como ilimitado.
+**Límites técnicos del piloto:** cada CSV admite hasta 1 MiB y 500 filas; el detalle serializado de un batch se limita a 300000 bytes. El catálogo local conserva el piloto sin cuota comercial de eventos. Esto no equivale a ofrecer recursos ilimitados, importaciones sin límites técnicos o retención perpetua.
 
 ## Oferta para la landing
 
-| Opción | Para quién | Mensaje público | Estado y acción |
-| --- | --- | --- | --- |
-| Piloto | Quien quiere comprobar el flujo con un evento propio | Prueba importación, revisión, abonos y saldos. Sin tarjeta. | Disponible sólo donde el registro esté habilitado. CTA: **Crear cuenta de piloto**. |
-| Por Evento | Un taller, encuentro, curso o evento ocasional | Un espacio de trabajo enfocado en preparar y cerrar un evento. | **En diseño.** Precio por validar. CTA al piloto, sin compra. |
-| Organizador | Quien prepara eventos de manera recurrente | Continúa trabajando con varios eventos y reutiliza la preparación de tus próximos cierres. | **En diseño.** Suscripción mensual/anual por validar. CTA al piloto. |
-| Equipo | Quien reparte importación, confirmación y revisión entre varias personas | Un mismo espacio con responsabilidades y acceso por rol. | **En diseño.** Suscripción mensual/anual por validar. Invitaciones aún pendientes. |
+| Opción      | Para quién                                                               | Mensaje público                                                     | Estado y acción                                                                                    |
+| ----------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Piloto      | Quien quiere comprobar el flujo con un evento propio                     | Prueba importación, revisión, abonos y saldos. Sin tarjeta.         | Disponible sólo donde el registro esté habilitado. CTA: **Crear cuenta de piloto**.                |
+| Por Evento  | Un taller, encuentro, curso o evento ocasional                           | Un espacio de trabajo enfocado en preparar y cerrar un evento.      | Evaluación manual implementada localmente, sin despliegue. Precio y compra pendientes.             |
+| Organizador | Quien prepara eventos de manera recurrente                               | Varios eventos, plantillas de participantes y una vista por moneda. | Evaluación manual implementada localmente, sin despliegue. Suscripción pendiente.                  |
+| Equipo      | Quien reparte importación, confirmación y revisión entre varias personas | Un mismo espacio con responsabilidades y acceso por rol.            | Equipo administrado mediante IAM implementado localmente, sin despliegue. Invitaciones pendientes. |
 
 Texto breve para la sección: **«Empieza con el piloto. Los planes de pago están en diseño y aún no se pueden contratar.»** No usar un plazo de prueba ficticio, una fecha de cobro, un descuento anual, un precio tachado ni una promesa de gratuidad permanente.
 
-## Hipótesis internas de capacidad
+## Catálogo de evaluación del incremento local
 
-Las siguientes cifras son bandas de trabajo para entrevistas, pruebas de carga y costos. **No son límites operativos actuales ni deben publicarse como prestaciones contratables.** El piloto no aplica automáticamente ninguna de estas cuotas.
+El catálogo versionado `2026-11-19.v1` aplica estas reglas en el backend del incremento local. **No son prestaciones contratables ni describen todavía la configuración del piloto desplegado.** La asignación de plan se realiza exclusivamente por un operador IAM autorizado; ninguna tarjeta de la landing o solicitud del cliente concede un tier.
 
-| Dimensión propuesta | Por Evento | Organizador | Equipo |
-| --- | --- | --- | --- |
-| Eventos abiertos simultáneos | 1 | 5 | 20 |
-| Personas con capacidad de operar | 1 | 1 | 5 |
-| Organización | 1 | 1 | 1 compartida |
-| Modalidad comercial | Pago por evento | Mensual o anual | Mensual o anual |
-| Participantes por evento | Por definir tras pruebas de carga y demanda | Por definir | Por definir |
-| Archivo CSV | Mantener el límite seguro por archivo y permitir dividir lotes | Mismo límite técnico por archivo | Mismo límite técnico hasta rediseñar el importador |
+| Dimensión             | Piloto `pilot`      | Por Evento `event` | Organizador `organizer` | Equipo `team`                      |
+| --------------------- | ------------------- | ------------------ | ----------------------- | ---------------------------------- |
+| Eventos no archivados | Sin cuota comercial | 1                  | 5                       | 20                                 |
+| Personas activas      | 1                   | 1                  | 1                       | 5                                  |
+| Organización          | Propia              | Propia             | Propia                  | Propia y colaboradores autorizados |
+| Activación            | Registro del piloto | Asignación IAM     | Asignación IAM          | Asignación IAM                     |
+| Cobros                | Ninguno             | Ninguno            | Ninguno                 | Ninguno                            |
+| CSV                   | 1 MiB y 500 filas   | Mismo límite       | Mismo límite            | Mismo límite                       |
 
-Un evento abierto requiere un ciclo de vida explícito que hoy no existe como regla comercial: borrador, abierto, cerrado y archivado. El evento cerrado debe conservarse consultable; el cierre no debe borrar el ledger. Definir cómo se autorizan correcciones posteriores antes de convertir «evento abierto» en una cuota facturable.
+Las personas incluyen al propietario y a todos los colaboradores activos, también auditores. Las organizaciones administrativas antiguas conservan sus membresías y acceso básico, pero su base de plazas no se supone igual a uno: Equipo permanece bloqueado hasta una migración IAM explícita de esa base.
+
+Un evento cerrado financieramente sigue consumiendo cuota mientras no se archive. Archivar conserva datos y libera una plaza de evento; reabrir un evento archivado vuelve a reservar capacidad. El contador y las versiones de plan se verifican en transacciones para impedir exceder el límite con solicitudes concurrentes. Un downgrade por debajo del uso de eventos o personas se rechaza; no borra movimientos ni revoca silenciosamente la organización personal.
 
 ## Funciones que justifican cada tier
 
-| Función | Piloto actual | Por Evento propuesto | Organizador propuesto | Equipo propuesto |
-| --- | --- | --- | --- | --- |
-| Importar, revisar, confirmar, saldo y reverso | Sí | Incluido | Incluido | Incluido |
-| Organización propia por cuenta nueva | Registro en implementación/verificación | Incluido | Incluido | Invitaciones a una organización compartida |
-| Resumen exportable del cierre | Pendiente | Sí | Sí | Sí |
-| Cierre y archivo explícitos | Pendiente | Sí | Sí | Sí |
-| Plantilla reutilizable de participantes y montos | Pendiente | Sin compromiso inicial | Sí | Sí |
-| Vista entre varios eventos | Pendiente | No prevista | Sí | Sí |
-| Invitaciones y baja de colaboradores | Pendiente | No prevista | No prevista en la hipótesis inicial | Sí |
-| Permisos por persona y evento | Roles API disponibles; administración manual | Propietario | Propietario | Importar, confirmar y auditar separados |
-| Registro de acciones con actor y fecha para exportación | No ofrecer como auditoría completa | Básico, por implementar | Básico, por implementar | Ampliado, por implementar |
-| Integración bancaria o conciliación sin revisión | No | No comprometida | No comprometida | No comprometida |
-| SLA o soporte con tiempo garantizado | No | Por definir, sin promesa pública | Por definir | Por definir |
+| Función                                          | Piloto                                                             | Por Evento en evaluación local                             | Organizador en evaluación local                 | Equipo en evaluación local                                       |
+| ------------------------------------------------ | ------------------------------------------------------------------ | ---------------------------------------------------------- | ----------------------------------------------- | ---------------------------------------------------------------- |
+| Importar, revisar, confirmar, saldo y reverso    | Sí                                                                 | Incluido                                                   | Incluido                                        | Incluido                                                         |
+| Organización propia por cuenta nueva             | Publicado y validado                                               | Conservada                                                 | Conservada                                      | Conservada al participar en otro equipo                          |
+| Cierre financiero y exportación CSV              | No concede cierres nuevos o reporte actual                         | Implementado localmente                                    | Implementado localmente                         | Implementado localmente                                          |
+| Consulta de un cierre histórico autorizado       | Disponible en el incremento local, incluso después de un downgrade | Sí                                                         | Sí                                              | Sí                                                               |
+| Plantilla de participantes y montos              | No crea o aplica plantillas                                        | No crea o aplica plantillas                                | Implementado localmente, hasta 90 participantes | Mismo límite                                                     |
+| Vista entre eventos por moneda                   | No                                                                 | No                                                         | Implementado localmente                         | Implementado localmente                                          |
+| Alta de colaboradores                            | No                                                                 | No                                                         | No                                              | IAM a sujetos ya registrados                                     |
+| Roles y baja de colaboradores                    | Sin interfaz publicada                                             | Propietario                                                | Propietario                                     | Propietario administra roles y revocación en el incremento local |
+| Invitaciones por enlace o correo                 | Pendiente                                                          | No                                                         | No                                              | Diferidas explícitamente                                         |
+| Permisos por persona y evento                    | Roles básicos                                                      | Propietario                                                | Propietario                                     | Roles operator/importer/confirmer/auditor y scope de eventos     |
+| Registro de acciones con actor y fecha           | No ofrecer como auditoría completa                                 | Nuevos movimientos y cierres locales conservan actor/fecha | Igual                                           | Además, bitácora local de permisos y asignaciones                |
+| Integración bancaria o conciliación sin revisión | No                                                                 | No comprometida                                            | No comprometida                                 | No comprometida                                                  |
+| SLA o soporte con tiempo garantizado             | No                                                                 | Por definir, sin promesa pública                           | Por definir                                     | Por definir                                                      |
 
-La separación por roles es un control de acceso técnico ya existente. La bitácora de auditoría comercial necesita más evidencia que un movimiento inmutable: actor, fecha, correlación, origen, cambios de permisos, exportación y cobertura de errores. No vender «auditoría completa» antes de implementarla y validarla.
+El cierre guarda un snapshot inmutable de saldos, movimientos y revisión del padrón; es un cierre financiero y no un cierre general de inscripciones. Su tamaño máximo es 300000 bytes. El CSV exportado admite hasta 1 MiB, protege celdas de texto frente a fórmulas y no convierte importes a números de punto flotante. Un reporte histórico autorizado sigue disponible después de un downgrade. Las plantillas no copian abonos o saldos y la vista global agrupa por moneda sin sumar MXN, USD y EUR en un total único.
+
+La bitácora disponible no constituye una promesa de auditoría completa, exportación de toda actividad, SLA o retención perpetua. Los movimientos antiguos pueden carecer de actor o fecha añadidos en el nuevo incremento.
 
 ## Criterios para habilitar la venta
 
-| Etapa | Trabajo concreto | Criterio de salida |
-| --- | --- | --- |
-| P0 — Piloto registrable | Confirmación de correo, organización asignada por servidor, roles no editables por cliente, acceso a `/app`, aislamiento y recuperación de intentos repetidos. | Una cuenta nueva puede completar el flujo sin aprovisionamiento manual; los ambientes development y testing tienen evidencia. |
-| P1 — Derecho de uso | Modelo de plan por organización, versión de catálogo y servicio de entitlements; cuotas de eventos/operadores comprobadas en backend con condiciones de concurrencia. | Dos solicitudes simultáneas no exceden una cuota; una solicitud idempotente no la consume dos veces. |
-| P2 — Por Evento | Ciclo de vida, cierre, consulta histórica y exportación del resumen; definición de qué activa y termina el derecho sobre un evento. | Se puede explicar la compra y reconstruir el cierre sin depender de un estado de pantalla. |
-| P3 — Organizador | Plantillas reutilizables, listado entre eventos y reglas de renovación, cambio de plan y acceso al histórico. | Los cambios de periodo o plan no borran movimientos ni producen pérdida silenciosa de acceso a registros. |
-| P4 — Equipo | Invitación de un solo uso con caducidad, aceptación autenticada, membresías gestionadas por servidor, permisos por evento, revocación y bitácora. | Una persona invitada no puede elegir otra organización ni ampliar su rol; la revocación se verifica. |
-| P5 — Facturación | Diseñar por separado el cobro del SaaS, estados de suscripción, webhooks idempotentes, reintentos y atención de cobros fallidos. Stripe se integra sólo cuando se autorice esa etapa. | La facturación modifica derechos de uso y no crea abonos de participantes. No hay Checkout activo mientras esta etapa esté pendiente. |
+| Etapa                   | Trabajo concreto                                                                                                                                                                      | Criterio de salida                                                                                                                    |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| P0 — Piloto registrable | Publicado mediante PR #10 y validado con una cuenta real en producción.                                                                                                               | Mantener la aceptación y las verificaciones por ambiente.                                                                             |
+| P1 — Derecho de uso     | Catálogo por organización, resolver actual y cuotas transaccionales implementados localmente.                                                                                         | Promover y comprobar los permisos, reintentos y cuotas en AWS antes de anunciar disponibilidad.                                       |
+| P2 — Por Evento         | Cierre, snapshot, archivo, reapertura recuperable y CSV implementados localmente.                                                                                                     | Verificar el ciclo desplegado; la compra y duración comercial del derecho siguen pendientes.                                          |
+| P3 — Organizador        | Plantillas y vista por moneda implementadas localmente.                                                                                                                               | Verificar promoción y conservación histórica; periodos y renovación siguen diferidos.                                                 |
+| P4 — Equipo             | Alta IAM, roles, scopes, baja y bitácora implementados localmente.                                                                                                                    | Verificar despliegue y revocación. Invitaciones con enlaces expirables y aceptación autenticada permanecen pendientes.                |
+| P5 — Facturación        | Diseñar por separado el cobro del SaaS, estados de suscripción, webhooks idempotentes, reintentos y atención de cobros fallidos. Stripe se integra sólo cuando se autorice esa etapa. | La facturación modifica derechos de uso y no crea abonos de participantes. No hay Checkout activo mientras esta etapa esté pendiente. |
 
 Antes de cobrar, definir retención, recuperación, exportación y tratamiento de una suscripción vencida. No borrar el historial financiero ni impedir correcciones de integridad mediante una regla de cobro improvisada. Los archivos CSV originales actualmente caducan a los siete días; esto es distinto de la conservación del ledger y debe comunicarse sin prometer retención perpetua.
 
 ## Precio y validación
 
-No se publica un importe hasta contar con un escenario autorizado de un organizador y una estimación de costo por evento/organización. Las decisiones pendientes son: precio por evento, precio mensual, alternativa anual, bandas de capacidad y política de soporte. El interés en una landing no demuestra voluntad de pago.
+No se publica un importe hasta contar con un escenario autorizado de un organizador y una estimación de costo por evento/organización. Las decisiones pendientes son precio por evento, precio mensual, alternativa anual, capacidad comercial definitiva y política de soporte. Los límites del catálogo local son reglas de evaluación, no una oferta de venta. El interés en una landing no demuestra voluntad de pago.
 
 Validar con entrevistas y pilotos: frecuencia de eventos, participantes por evento, número de operadores, dificultad del cierre, volumen de filas rechazadas, correcciones y necesidad de exportar. Medir tiempo desde importación hasta cierre revisado, sin prometer un ahorro porcentual antes de contar con una comparación real. La métrica comercial principal será la repetición de uso por organizador junto con un cierre correcto, no el volumen monetario de los pagos externos.
 
 ## Contexto de mercado consultado
 
-Consulta de páginas oficiales realizada el 19 de noviembre de 2026. Sirve para comparar modelos y segmentación, no para demostrar demanda de SaldoEvento ni trasladar tarifas entre países.
+Consulta histórica de páginas oficiales realizada el 19 de noviembre de 2026; las cifras siguientes no se han vuelto a verificar en este incremento. Sirven para comparar modelos y segmentación, no para demostrar demanda de SaldoEvento ni trasladar tarifas entre países.
 
 - **Cheddar Up:** combina una entrada gratuita con Pro y Team; diferencia funciones de venta/registro, colaboración y reportes. Su oferta recibe pagos y aplica tarifas de procesamiento. La lección para SaldoEvento es separar el piloto de capacidades avanzadas y de equipo, sin presentar el procesamiento de pagos como una función propia. [Precios oficiales de Cheddar Up](https://www.cheddarup.com/pricing/).
 - **Ticket Tailor:** ofrece pago por ticket o créditos anticipados. La página consultada muestra £0.60 por ticket en pago por uso y créditos desde £0.22, más IVA, con costos del procesador separados. Está centrado en venta de entradas mediante procesadores conectados. SaldoEvento puede conservar una opción por evento, pero su unidad de valor propuesta es el cierre y no el ticket vendido. [Precios oficiales de Ticket Tailor](https://www.tickettailor.com/pricing).
@@ -96,9 +104,9 @@ Consulta de páginas oficiales realizada el 19 de noviembre de 2026. Sirve para 
 ## Reglas de comunicación
 
 1. Un único plan registrable ahora: el piloto, según el ambiente y su verificación.
-2. Cada tier futuro lleva la etiqueta «En diseño» y precio «Por definir» si aparece un campo de precio.
+2. Los tiers sin promoción se describen como evaluación local o «En diseño», con precio «Por definir» si aparece un campo de precio; no como prestaciones ya publicadas.
 3. Las funciones pendientes se describen como propuestas, no como una lista de funciones disponibles.
-4. No ofrecer conectar un banco, cobrar a asistentes, emitir comprobantes fiscales, enviar invitaciones, exportar reportes o garantizar un SLA mientras no estén implementados y verificados.
+4. No ofrecer conectar un banco, cobrar a asistentes, emitir comprobantes fiscales, enviar invitaciones o garantizar un SLA. Cierre, exportación, plantillas y Equipo requieren la promoción y verificación del incremento antes de anunciarse como disponibles en producción.
 5. No declarar datos ilimitados, importaciones sin límite o conservación para siempre; los límites técnicos y los comerciales son conceptos distintos.
 6. El registro no activa Stripe, una suscripción de pago ni un cargo futuro automático.
 
