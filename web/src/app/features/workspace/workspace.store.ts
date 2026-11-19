@@ -77,12 +77,19 @@ export const WorkspaceStore = signalStore(
         await reload(); patchState(store, { notice: 'Participante registrado.' }); return true;
       }),
       importFile: (file: File) => run(async () => {
+        const epoch = context.capture();
+        const importBase = base();
         if (file.size > 1_048_576) throw new Error('El CSV puede tener hasta 1 MB.');
         const sha256 = [...new Uint8Array(await crypto.subtle.digest('SHA-256', await file.arrayBuffer()))].map(value => value.toString(16).padStart(2, '0')).join('');
-        const result = await api.request<{ batch: ImportBatch; upload?: { url: string; headers: Record<string, string> } }>('POST', `${base()}/imports`, { operationId: sha256, sha256, fileName: file.name });
+        if (!context.isCurrent(epoch)) return false;
+        const result = await api.request<{ batch: ImportBatch; upload?: { url: string; headers: Record<string, string> } }>('POST', `${importBase}/imports`, { operationId: sha256, sha256, fileName: file.name });
+        if (!context.isCurrent(epoch)) return false;
         if (result.upload) await api.upload(result.upload.url, file, result.upload.headers);
+        if (!context.isCurrent(epoch)) return false;
         patchState(store, { selectedBatch: result.batch });
-        await reload(); patchState(store, { notice: 'Archivo recibido. Revisa las coincidencias antes de confirmar.' }); return true;
+        await reload();
+        if (!context.isCurrent(epoch)) return false;
+        patchState(store, { notice: 'Archivo recibido. Revisa las coincidencias antes de confirmar.' }); return true;
       }),
       selectBatch: (batchId: string) => run(async () => {
         const { batch } = await api.request<{ batch: ImportBatch }>('GET', `${base()}/imports/${encodeURIComponent(batchId)}`);

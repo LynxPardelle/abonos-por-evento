@@ -27,6 +27,8 @@ Prefijo común: `/api/v1`.
 | GET `/events/{eventId}/movements`                         | `{version,movements:[]}`                                                                                    | lectura                  |
 | POST `/events/{eventId}/movements/{movementId}/reversals` | `{operationId,expectedVersion}` → `{movement,version}`                                                      | confirmer/operator/admin |
 
+El incremento añade `GET /events/{eventId}` → `{event}` para la lectura autenticada del detalle que utiliza Cierre y reportes. Está publicado en SAM y hereda el autorizador JWT; los eventos ajenos no se revelan.
+
 `GET /health` es público y sólo comprueba liveness, no disponibilidad de tablas, correo o worker. Los contratos internos IAM no son rutas públicas ni operaciones que el navegador pueda habilitar desde su JSON.
 
 ## Cuenta, planes y Equipo — incremento local

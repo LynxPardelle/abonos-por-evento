@@ -252,6 +252,7 @@ export function validateInfrastructure(template) {
       'POST /api/v1/organizations/current/members/{memberId}/revoke',
     ],
     EventsFunction: [
+      'GET /api/v1/events/{eventId}',
       'GET /api/v1/templates',
       'GET /api/v1/templates/{templateId}',
       'POST /api/v1/templates',

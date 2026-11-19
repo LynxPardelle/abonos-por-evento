@@ -670,6 +670,14 @@ Resources:
             Path: /api/v1/events
             Method: POST
             PayloadFormatVersion: "2.0"
+        GetEvent:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: BusinessApi
+            Path: /api/v1/events/{eventId}
+            Method: GET
+            PayloadFormatVersion: "2.0"
         ListParticipants:
           Type: HttpApi
           Properties:

@@ -56,3 +56,9 @@ Implementación en `codex/subscription-tiers`, basada en development `71140ec0`.
 Pasaron 161 pruebas Node, 33 Angular, build SSR, paquete/smoke Lambda de cinco rutas, validador SAM y cfn-lint 1.60.1. Revisión independiente sin hallazgos altos o medios pendientes. En navegador se verificaron plan, plantilla y evento nuevo sin abonos copiados, abono de 500.00 MXN, cierre/reportes, archivo que libera cupo, reapertura que lo reserva y conserva historia, vista general y revocación con actualización de plazas. [Reporte local](../docs/verificacion/subscription-tiers-local-2026-11-19.json) y [detalle de verificaciones](../docs/VERIFICACION.md).
 
 El primer paso pendiente es SUB-010: publicar el incremento por PR a development, desplegarlo y comprobar transacciones reales, permisos y asignación de evaluación con datos autorizados; promover después a testing con su recorrido humano. La producción del piloto permanece publicada y no se usa su aceptación para dar por verificado este incremento.
+
+## Promoción autorizada a testing
+
+El propietario autorizó subir e integrar este incremento a development, promoverlo y desplegarlo en testing con sus verificaciones. La nueva promoción a **main permanece pendiente hasta su prueba de los tiers con su cuenta**. Stripe continúa desactivado. El recibo de los PR debe acreditar el SHA resultante, CI, change set, huella del frontend, smokes reales y limpieza de cuentas temporales; los resultados locales anteriores se conservan como evidencia de desarrollo.
+
+La preparación añadió la ruta HTTP individual de evento utilizada por Cierre y reportes y una regresión de contexto que impide restaurar un lote CSV de otra organización tras un PUT pendiente. El smoke exclusivo de testing usa dos identidades temporales sin correos, recorre las asignaciones de evaluación y comprueba revocación con el mismo JWT; no modifica cuentas ni recursos de producción.

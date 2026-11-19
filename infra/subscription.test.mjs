@@ -124,6 +124,7 @@ test('new account, template, closing, report and overview routes inherit the JWT
       'POST /api/v1/organizations/current/members/{memberId}/revoke',
     ],
     EventsFunction: [
+      'GET /api/v1/events/{eventId}',
       'GET /api/v1/templates',
       'GET /api/v1/templates/{templateId}',
       'POST /api/v1/templates',
