@@ -1,0 +1,39 @@
+<a class="skip" href="#workspace">Ir al contenido</a>
+<header class="topbar">
+  <a routerLink="/" class="brand" aria-label="SaldoEvento, inicio"><span class="brand-mark" aria-hidden="true">s<span>e</span></span>SaldoEvento<span class="brand-dot">.</span></a>
+  <div class="topbar-meta">
+    @if (session.local()) { <span class="local-label">Prueba local · datos sintéticos</span> }
+    @if (session.authenticated() && !session.local()) { <button class="text-button" (click)="session.signOut()">Cerrar sesión</button> }
+  </div>
+</header>
+<div class="layout">
+  <aside class="sidebar">
+    <p class="eyebrow">ESPACIO DE TRABAJO</p>
+    @if (organization.current(); as account) {
+      @if (account.organizations.length > 1) {
+        <label class="organization-picker">Organización<select [value]="account.activeOrganizationId" (change)="switchOrganization($event)" [disabled]="organization.busy()">@for (membership of account.organizations; track membership.organizationId) {<option [value]="membership.organizationId">{{ membership.name ?? (membership.isHome ? 'Mi organización' : membership.organizationId) }}</option>}</select></label>
+      }
+      <p class="access-label">{{ planNames[organization.organization()!.plan.code] }} <span>· {{ organization.organization()!.plan.source === 'manual' ? 'Evaluación' : 'Acceso actual' }}</span></p>
+    }
+    <nav aria-label="Navegación principal">
+      <a routerLink="/app" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">Mis eventos</a>
+      <a routerLink="/app/plan" routerLinkActive="active">Plan y capacidad</a>
+      <a routerLink="/app/plantillas" routerLinkActive="active">Plantillas</a>
+      <a routerLink="/app/equipo" routerLinkActive="active">Equipo y permisos</a>
+      @if (event(); as current) { <div class="event-nav"><p>{{ current.name }}</p><a [routerLink]="['/eventos', current.eventId, 'asistentes']" routerLinkActive="active">Participantes y saldos</a><a [routerLink]="['/eventos', current.eventId, 'importaciones']" routerLinkActive="active">Importaciones</a><a [routerLink]="['/eventos', current.eventId, 'movimientos']" routerLinkActive="active">Movimientos</a><a [routerLink]="['/eventos', current.eventId, 'cierre']" routerLinkActive="active">Cierre y reportes</a></div> }
+    </nav>
+    <div class="sidebar-note">Confirmación humana<p>Los pagos externos se aplican después de tu revisión.</p></div>
+    <p class="sidebar-footer">Un producto de Lynx Pardelle</p>
+  </aside>
+  <main id="workspace" class="work-surface" [attr.aria-busy]="busy() || organization.busy()">
+    @if (!session.ready()) { <div class="empty"><p role="status">Preparando tu espacio…</p></div> }
+    @else if (!session.authenticated()) { <section class="sign-in"><p class="eyebrow">TU ESPACIO</p><h1>Entra a SaldoEvento</h1><p>Consulta tus eventos, sus pagos externos y los cierres guardados.</p><button (click)="session.signIn()">Entrar a mi espacio ↗</button>@if (session.message()) {<p class="message error" role="alert">{{ session.message() }}</p>}</section> }
+    @else if (organization.busy()) { <div class="empty"><p role="status">Verificando organización y permisos…</p></div> }
+    @else if (!organization.current()) { <section class="empty"><h1>No se pudo abrir la organización</h1><p class="message error" role="alert">{{ organization.error() }}</p><button class="secondary" (click)="home()">Volver a mi organización</button></section> }
+    @else {
+      @if (heading()) {<div class="surface-heading"><div><p class="eyebrow">MI ORGANIZACIÓN</p><h1>{{ heading() }}</h1></div><ng-content select="[page-actions]" /></div>}
+      <ng-content />
+    }
+    <footer class="page-footer"><span>SaldoEvento</span><span>Pagos externos. Saldos trazables.</span></footer>
+  </main>
+</div>

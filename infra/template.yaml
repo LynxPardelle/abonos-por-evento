@@ -346,6 +346,27 @@ Resources:
                 Fn::Sub: https://cognito-idp.${AWS::Region}.${AWS::URLSuffix}/${UserPool}
               audience:
                 - Ref: UserPoolClient
+      CorsConfiguration:
+        AllowHeaders:
+          - authorization
+          - content-type
+          - x-saldoevento-organization
+        AllowMethods:
+          - GET
+          - POST
+          - OPTIONS
+        AllowOrigins:
+          - Fn::If:
+              - HasPublicOrigin
+              - Ref: PublicOrigin
+              - Fn::Join:
+                  - ""
+                  - - https://
+                    - Fn::FindInMap:
+                        - Environments
+                        - Ref: Stage
+                        - DomainName
+        MaxAge: 300
   EventsTable:
     Type: AWS::DynamoDB::Table
     DeletionPolicy: Retain
@@ -601,6 +622,12 @@ Resources:
         Variables:
           EVENTS_TABLE:
             Ref: EventsTable
+          IDENTITY_TABLE:
+            Ref: IdentityTable
+          USER_POOL_ID:
+            Ref: UserPool
+          IDENTITY_RESOLVER_FUNCTION_NAME:
+            Ref: IdentityResolverFunction
       Policies:
         - Statement:
             - Effect: Allow
@@ -613,6 +640,18 @@ Resources:
               Resource:
                 Fn::GetAtt:
                   - EventsTable
+                  - Arn
+            - Effect: Allow
+              Action: dynamodb:ConditionCheckItem
+              Resource:
+                Fn::GetAtt:
+                  - IdentityTable
+                  - Arn
+            - Effect: Allow
+              Action: lambda:InvokeFunction
+              Resource:
+                Fn::GetAtt:
+                  - IdentityResolverFunction
                   - Arn
       Events:
         ListEvents:
@@ -647,6 +686,38 @@ Resources:
             Path: /api/v1/events/{eventId}/participants
             Method: POST
             PayloadFormatVersion: "2.0"
+        ListTemplates:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: BusinessApi
+            Path: /api/v1/templates
+            Method: GET
+            PayloadFormatVersion: "2.0"
+        GetTemplate:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: BusinessApi
+            Path: /api/v1/templates/{templateId}
+            Method: GET
+            PayloadFormatVersion: "2.0"
+        CreateTemplate:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: BusinessApi
+            Path: /api/v1/templates
+            Method: POST
+            PayloadFormatVersion: "2.0"
+        ApplyTemplate:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: BusinessApi
+            Path: /api/v1/templates/{templateId}/events
+            Method: POST
+            PayloadFormatVersion: "2.0"
   ReconciliationFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -666,6 +737,12 @@ Resources:
             Ref: ImportsBucket
           EVENTS_FUNCTION_NAME:
             Ref: EventsFunction
+          IDENTITY_TABLE:
+            Ref: IdentityTable
+          USER_POOL_ID:
+            Ref: UserPool
+          IDENTITY_RESOLVER_FUNCTION_NAME:
+            Ref: IdentityResolverFunction
       Policies:
         - Statement:
             - Effect: Allow
@@ -688,6 +765,18 @@ Resources:
               Resource:
                 Fn::GetAtt:
                   - EventsFunction
+                  - Arn
+            - Effect: Allow
+              Action: dynamodb:ConditionCheckItem
+              Resource:
+                Fn::GetAtt:
+                  - IdentityTable
+                  - Arn
+            - Effect: Allow
+              Action: lambda:InvokeFunction
+              Resource:
+                Fn::GetAtt:
+                  - IdentityResolverFunction
                   - Arn
       Events:
         StartImport:
@@ -752,6 +841,62 @@ Resources:
             ApiId:
               Ref: BusinessApi
             Path: /api/v1/events/{eventId}/balances
+            Method: GET
+            PayloadFormatVersion: "2.0"
+        Overview:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: BusinessApi
+            Path: /api/v1/overview
+            Method: GET
+            PayloadFormatVersion: "2.0"
+        GetClosing:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: BusinessApi
+            Path: /api/v1/events/{eventId}/closing
+            Method: GET
+            PayloadFormatVersion: "2.0"
+        CloseEvent:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: BusinessApi
+            Path: /api/v1/events/{eventId}/closing
+            Method: POST
+            PayloadFormatVersion: "2.0"
+        ReopenEvent:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: BusinessApi
+            Path: /api/v1/events/{eventId}/reopen
+            Method: POST
+            PayloadFormatVersion: "2.0"
+        ArchiveEvent:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: BusinessApi
+            Path: /api/v1/events/{eventId}/archive
+            Method: POST
+            PayloadFormatVersion: "2.0"
+        ExportReport:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: BusinessApi
+            Path: /api/v1/events/{eventId}/report
+            Method: GET
+            PayloadFormatVersion: "2.0"
+        ExportClosingSnapshot:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: BusinessApi
+            Path: /api/v1/events/{eventId}/report/{closureId}
             Method: GET
             PayloadFormatVersion: "2.0"
   ImportWorkerFunction:
@@ -1214,6 +1359,160 @@ Resources:
             - DomainName
         HostedZoneId: Z2FDTNDATAQYW2
         EvaluateTargetHealth: false
+  IdentityResolverLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName:
+        Fn::Sub: /aws/lambda/saldoevento-${Stage}-identity-resolver
+      RetentionInDays: 14
+  IdentityHttpLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName:
+        Fn::Sub: /aws/lambda/saldoevento-${Stage}-identity-http
+      RetentionInDays: 14
+  IdentityAdminLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName:
+        Fn::Sub: /aws/lambda/saldoevento-${Stage}-identity-admin
+      RetentionInDays: 14
+  IdentityResolverFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: saldoevento-${Stage}-identity-resolver
+      CodeUri: ../services/
+      Handler: identity/resolver.handler
+      LoggingConfig:
+        LogFormat: JSON
+        LogGroup:
+          Ref: IdentityResolverLogGroup
+      Environment:
+        Variables:
+          IDENTITY_TABLE:
+            Ref: IdentityTable
+          USER_POOL_ID:
+            Ref: UserPool
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:Query
+              Resource:
+                Fn::GetAtt:
+                  - IdentityTable
+                  - Arn
+  IdentityHttpFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: saldoevento-${Stage}-identity-http
+      CodeUri: ../services/
+      Handler: identity/http.handler
+      LoggingConfig:
+        LogFormat: JSON
+        LogGroup:
+          Ref: IdentityHttpLogGroup
+      Environment:
+        Variables:
+          IDENTITY_TABLE:
+            Ref: IdentityTable
+          USER_POOL_ID:
+            Ref: UserPool
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:Query
+                - dynamodb:PutItem
+                - dynamodb:UpdateItem
+                - dynamodb:ConditionCheckItem
+              Resource:
+                Fn::GetAtt:
+                  - IdentityTable
+                  - Arn
+      Events:
+        Me:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: BusinessApi
+            Path: /api/v1/me
+            Method: GET
+            PayloadFormatVersion: "2.0"
+        ListMembers:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: BusinessApi
+            Path: /api/v1/organizations/current/members
+            Method: GET
+            PayloadFormatVersion: "2.0"
+        ChangeMemberRole:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: BusinessApi
+            Path: /api/v1/organizations/current/members/{memberId}/role
+            Method: POST
+            PayloadFormatVersion: "2.0"
+        RevokeMember:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: BusinessApi
+            Path: /api/v1/organizations/current/members/{memberId}/revoke
+            Method: POST
+            PayloadFormatVersion: "2.0"
+  IdentityAdminFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: saldoevento-${Stage}-identity-admin
+      CodeUri: ../services/
+      Handler: identity/admin.handler
+      LoggingConfig:
+        LogFormat: JSON
+        LogGroup:
+          Ref: IdentityAdminLogGroup
+      Environment:
+        Variables:
+          IDENTITY_TABLE:
+            Ref: IdentityTable
+          USER_POOL_ID:
+            Ref: UserPool
+          EVENTS_TABLE:
+            Ref: EventsTable
+          EVENTS_FUNCTION_NAME:
+            Ref: EventsFunction
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:Query
+                - dynamodb:PutItem
+                - dynamodb:UpdateItem
+                - dynamodb:ConditionCheckItem
+              Resource:
+                Fn::GetAtt:
+                  - IdentityTable
+                  - Arn
+            - Effect: Allow
+              Action: dynamodb:ConditionCheckItem
+              Resource:
+                Fn::GetAtt:
+                  - EventsTable
+                  - Arn
+            - Effect: Allow
+              Action: lambda:InvokeFunction
+              Resource:
+                Fn::GetAtt:
+                  - EventsFunction
+                  - Arn
 Outputs:
   IdentityTableName:
     Value:
@@ -1251,3 +1550,6 @@ Outputs:
   ImportsDeadLetterQueueUrl:
     Value:
       Ref: ImportsDlq
+  IdentityAdminFunctionName:
+    Value:
+      Ref: IdentityAdminFunction

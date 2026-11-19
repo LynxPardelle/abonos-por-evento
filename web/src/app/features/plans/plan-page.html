@@ -1,0 +1,13 @@
+<app-workspace-frame heading="Plan y capacidad" [busy]="request.busy()">
+  <button page-actions class="secondary small" (click)="refresh()" [disabled]="request.busy()">Actualizar capacidad</button>
+  @if (request.error()) {<p class="message error" role="alert">{{ request.error() }}</p>}
+  @if (organization.organization(); as access) {
+    <section class="access-intro"><div><p class="eyebrow">ACCESO ACTUAL</p><h2>{{ names[access.plan.code] }}</h2><p>{{ access.plan.source === 'manual' ? 'Evaluación administrada. El acceso se asigna para probar las capacidades del producto.' : 'Tu cuenta tiene acceso al piloto sin tarjeta.' }}</p></div><span class="status-tag">Sin cobros activos</span></section>
+    <dl class="facts"><div><dt>Eventos en trabajo</dt><dd>{{ usage()?.nonArchivedEvents ?? '—' }}<small>@if (access.limits.maxActiveEvents === null) {Sin cuota comercial configurada} @else {de {{ access.limits.maxActiveEvents }} disponibles en tu acceso}</small></dd></div><div><dt>Personas con acceso</dt><dd>{{ access.usage.activeSeats ?? '—' }}<small>Capacidad {{ access.limits.maxSeats }} · {{ access.usage.seatBaselineVerified ? 'Base verificada' : 'Base pendiente de verificar' }}</small></dd></div><div><dt>CSV por archivo</dt><dd>1 MiB<small>Hasta 500 filas · detalle hasta 300000 bytes</small></dd></div></dl>
+    <p class="information">Los eventos cerrados siguen contando mientras estén en trabajo. Archivarlos libera capacidad y conserva su historial. Los límites del archivo son técnicos y no dependen del monto de los pagos.</p>
+    <section class="surface-section"><p class="eyebrow">OPCIONES DEL PRODUCTO</p><h2>Capacidades para cada forma de organizar</h2><p>Se habilitan mediante una evaluación administrada. Los planes comerciales siguen en diseño; no hay contratación, precio aprobado ni cambio automático de plan.</p>
+      @for (tier of tiers; track tier.name) {<article class="tier-row"><div><span class="count">EN DISEÑO COMERCIAL</span><h3>{{ tier.name }}</h3><p>{{ tier.audience }}</p></div><div><p>{{ tier.detail }}</p><small>{{ tier.capacity }}</small></div></article>}
+    </section>
+    <p class="muted">Una evaluación no activa cargos futuros. SaldoEvento registra pagos externos; no procesa el dinero de participantes. No se ofrece conexión bancaria, facturación fiscal ni SLA.</p>
+  }
+</app-workspace-frame>

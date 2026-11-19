@@ -11,15 +11,22 @@ export function createUploadSigner({ s3, bucketName }) {
 }
 export function createAwsDependencies() {
   const lambda = new LambdaClient({}); const s3 = new S3Client({});
+  async function invokeEvents(internal) {
+    const response = await lambda.send(new InvokeCommand({ FunctionName: process.env.EVENTS_FUNCTION_NAME, Payload: Buffer.from(JSON.stringify({ internal })) }));
+    if (response.FunctionError) throw new DomainError(503, 'EVENTS_UNAVAILABLE', 'El servicio de eventos no está disponible.');
+    const payload = JSON.parse(Buffer.from(response.Payload).toString('utf8'));
+    if (payload.statusCode) {
+      const error = JSON.parse(payload.body ?? '{}').error;
+      if ([400, 403, 404, 409, 413, 429].includes(payload.statusCode) && typeof error?.code === 'string') throw new DomainError(payload.statusCode, error.code, error.message);
+      throw new DomainError(503, 'EVENTS_UNAVAILABLE', 'El servicio de eventos no está disponible.');
+    }
+    return payload;
+  }
   return {
     repository: new DynamoReconciliationRepository(),
-    async eventReader({ organizationId, eventId }) {
-      const response = await lambda.send(new InvokeCommand({ FunctionName: process.env.EVENTS_FUNCTION_NAME, Payload: Buffer.from(JSON.stringify({ internal: { action: 'getEvent', organizationId, eventId } })) }));
-      if (response.FunctionError) throw new DomainError(503, 'EVENTS_UNAVAILABLE', 'El servicio de eventos no está disponible.');
-      const payload = JSON.parse(Buffer.from(response.Payload).toString('utf8'));
-      if (payload.statusCode) { if (payload.statusCode === 404) throw new DomainError(404, 'EVENT_NOT_FOUND', 'Evento no encontrado.'); throw new DomainError(503, 'EVENTS_UNAVAILABLE', 'El servicio de eventos no está disponible.'); }
-      return payload;
-    },
+    eventReader: scope => invokeEvents({ action: 'getEvent', ...scope }),
+    eventCommand: (action, scope, input, actor) => invokeEvents({ action, ...scope, ...input, actor }),
+    eventLister: actor => invokeEvents({ action: 'listEventsforOverview', organizationId: actor.organizationId, actor }),
     uploadSigner: createUploadSigner({ s3, bucketName: process.env.IMPORTS_BUCKET }),
     async objectReader({ bucket, key }) {
       const response = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));

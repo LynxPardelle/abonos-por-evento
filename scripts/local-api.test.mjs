@@ -5,6 +5,29 @@ import { request as httpRequest } from 'node:http';
 import test from 'node:test';
 import { createLocalServer } from './local-api.mjs';
 
+test('local evaluation integrates server plan, template, immutable close, archive and reopen without billing', async t => {
+  const server = await createLocalServer({ seed: false }); server.listen(0, '127.0.0.1'); await once(server, 'listening'); t.after(() => new Promise(resolve => server.close(resolve)));
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  const call = async (method, path, body) => { const response = await fetch(`${origin}/api/v1${path}`, { method, headers: { 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) }); const result = await response.json(); assert.ok(response.ok, JSON.stringify(result)); return result; };
+  const me = await call('GET', '/me'); assert.equal(me.organization.plan.code, 'team'); assert.equal(me.organization.plan.billingEnabled, false);
+  assert.equal((await call('GET', '/organizations/current/members')).members.length, 2);
+  const { event } = await call('POST', '/events', { name: 'Evento con preparación', currency: 'MXN', operationId: 'tier-event' });
+  await call('POST', `/events/${event.eventId}/participants`, { name: 'Ana', reference: 'ANA-01', agreedMinor: '100000', operationId: 'person-a' });
+  const templateResult = await call('POST', '/templates', { name: 'Preparación reutilizable', sourceEventId: event.eventId, operationId: 'save-template' });
+  const template = templateResult.template;
+  const created = await call('POST', `/templates/${template.templateId}/events`, { operationId: 'apply-template', name: 'Siguiente evento', expectedTemplateVersion: template.version });
+  assert.notEqual(created.event.eventId, event.eventId);
+  assert.equal((await call('GET', `/events/${created.event.eventId}/balances`)).balances[0].paidMinor, '0');
+  await call('POST', `/events/${event.eventId}/payments`, { operationId: 'payment-a', participantId: (await call('GET', `/events/${event.eventId}/participants`)).participants[0].participantId, reference: 'REF-A', amountMinor: '50000', currency: 'MXN', expectedVersion: 0 });
+  let state = await call('GET', `/events/${event.eventId}/closing`);
+  state = await call('POST', `/events/${event.eventId}/closing`, { operationId: 'close-http', expectedLedgerVersion: state.ledgerVersion, expectedLifecycleVersion: state.lifecycleVersion });
+  assert.equal(state.financialStatus, 'closed'); assert.equal(state.latestClosure.totals.paidMinor, '50000');
+  const report = await call('GET', `/events/${event.eventId}/report/${state.latestClosure.closureId}`); assert.match(report.content, /500\.00/);
+  state = await call('POST', `/events/${event.eventId}/archive`, { operationId: 'archive-http', expectedLifecycleVersion: state.lifecycleVersion, expectedEventRevision: state.eventRevision }); assert.ok(state.archivedAt);
+  state = await call('POST', `/events/${event.eventId}/reopen`, { operationId: 'reopen-http', expectedLifecycleVersion: state.lifecycleVersion, expectedEventRevision: state.eventRevision }); assert.equal(state.financialStatus, 'open'); assert.equal(state.archivedAt, null);
+  assert.equal((await call('GET', '/overview')).events.length, 2);
+});
+
 test('synthetic HTTP pilot imports, confirms, survives reload and reverses without duplicate payments', async (t) => {
   const server = await createLocalServer({ seed: false });
   server.listen(0, '127.0.0.1'); await once(server, 'listening');

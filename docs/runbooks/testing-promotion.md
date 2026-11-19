@@ -1,6 +1,6 @@
 # Promoción de SaldoEvento a testing
 
-La entrega sigue **feature → development → testing**. La rama `main` y el ambiente de producción permanecen pendientes hasta la prueba con la cuenta real del propietario. Este procedimiento no publica a producción.
+La entrega sigue **feature → development → testing**, antes de una promoción separada a main. El piloto ya completó la aceptación real y se publicó mediante PR #10 en main `05b02f3`. El incremento de suscripciones continúa local y necesita sus propias verificaciones y aceptación. Este procedimiento no publica a producción ni habilita Stripe.
 
 ## Controles remotos verificados
 

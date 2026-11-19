@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 2,
+  "product": "SaldoEvento",
+  "environment": "production",
+  "origin": "https://saldoevento.lynxpardelle.com",
+  "sourceCommit": "05b02f31563d88285d22b5085d69d3ba757e6675",
+  "publication": {
+    "stack": "saldoevento-prod",
+    "stackStatus": "CREATE_COMPLETE",
+    "cloudFrontStatus": "Deployed",
+    "approvedByOwner": true,
+    "receipt": "https://github.com/LynxPardelle/abonos-por-evento/pull/10#issuecomment-7023051899",
+    "pullRequest": "https://github.com/LynxPardelle/abonos-por-evento/pull/10"
+  },
+  "publicVerification": {
+    "status": "passed",
+    "completedAt": "2026-11-19T21:42:53.515Z",
+    "checks": [
+      {
+        "name": "local_main_artifact",
+        "status": "passed"
+      },
+      {
+        "name": "aws_production_configuration",
+        "status": "passed"
+      },
+      {
+        "name": "public_http_and_asset_hashes",
+        "status": "passed"
+      }
+    ],
+    "http": {
+      "routes": 4,
+      "assets": 12,
+      "negativeAuthenticationRequests": 2
+    },
+    "frontendContentSha256": "13ffe85ec63383c2c4f1655201b2389aa068910222580ad0197f874bb520df83"
+  },
+  "realAccountAcceptance": {
+    "data": "authorized synthetic records",
+    "confirmedAfterReversalMinor": "75000",
+    "importRows": 3,
+    "currency": "MXN",
+    "reloadAfterReversal": "passed",
+    "status": "passed",
+    "registration": "completed by owner in Cognito; authenticated production workspace observed",
+    "movements": 3,
+    "reloadBeforeReversal": "passed",
+    "pendingBeforeReversalMinor": "75000",
+    "completedAt": "2026-11-19T22:05:35.8399692Z",
+    "pendingAfterReversalMinor": "125000",
+    "confirmedBeforeReversalMinor": "125000",
+    "historyPreserved": true,
+    "unappliedRows": 1,
+    "participants": 2,
+    "reversalMinor": "-50000"
+  },
+  "stripeEnabled": false,
+  "checkoutUsed": false,
+  "privacy": "No account identifiers, email, credentials, OTP, cookies, OAuth codes or tokens are stored in this versioned evidence."
+}

@@ -2,17 +2,25 @@ import { authorize } from '../shared/auth.mjs';
 import { DomainError, handleError, json, parseBody, requestPath, validateId } from '../shared/http.mjs';
 import { createReconciliationService } from './application.mjs';
 import { createAwsDependencies } from './runtime.mjs';
-export function createReconciliationHandler({ service }) {
+import { resolveAccess } from '../shared/access.mjs';
+export function createReconciliationHandler({ service, accessResolver = async (event, roles) => authorize(event, roles) }) {
   return async (event) => {
     try {
       const method = event?.requestContext?.http?.method;
       const path = requestPath(event);
-      const match = /^\/api\/v1\/events\/([^/]+)\/(imports|allocations|payments|balances|movements)(?:\/([^/]+))?(\/reversals)?$/.exec(path);
+      if (path === '/api/v1/overview' && method === 'GET') return json(200, await service.overview(await accessResolver(event, ['auditor'], { capability: 'viewOverview' })));
+      const match = /^\/api\/v1\/events\/([^/]+)\/(imports|allocations|payments|balances|movements|closing|reopen|archive|report)(?:\/([^/]+))?(\/reversals)?$/.exec(path);
       if (!match) throw new DomainError(404, 'ROUTE_NOT_FOUND', 'No se encontró la ruta.');
       const eventId = validateId(match[1], 'eventId');
       const [, , area, resourceId, reversal] = match;
-      const role = method === 'GET' ? ['auditor'] : area === 'imports' ? ['importer'] : ['confirmer'];
-      const actor = authorize(event, role);
+      const role = method === 'GET' ? ['auditor'] : ['closing', 'reopen', 'archive'].includes(area) ? ['operator'] : area === 'imports' ? ['importer'] : ['confirmer'];
+      const capability = method === 'GET' ? area === 'report' && !resourceId ? 'exportEvent' : undefined : area === 'closing' ? 'closeEvent' : area === 'imports' ? 'importPayments' : area === 'allocations' || area === 'payments' ? 'confirmPayments' : area === 'movements' ? 'reversePayments' : undefined;
+      const actor = await accessResolver(event, role, { eventId, ...(capability ? { capability } : {}) });
+      if (area === 'closing' && !resourceId && method === 'GET') return json(200, await service.closing(actor, eventId));
+      if (area === 'closing' && !resourceId && method === 'POST') return json(200, await service.close(actor, eventId, parseBody(event)));
+      if (area === 'reopen' && !resourceId && method === 'POST') return json(200, await service.reopen(actor, eventId, parseBody(event)));
+      if (area === 'archive' && !resourceId && method === 'POST') return json(200, await service.archive(actor, eventId, parseBody(event)));
+      if (area === 'report' && !reversal && method === 'GET') return json(200, await service.report(actor, eventId, resourceId));
       if (area === 'imports' && !resourceId && method === 'POST') return json(201, await service.startImport(actor, eventId, parseBody(event)));
       if (area === 'imports' && !resourceId && method === 'GET') return json(200, await service.listImports(actor, eventId));
       if (area === 'imports' && resourceId && !reversal && method === 'GET') return json(200, await service.getImport(actor, eventId, resourceId));
@@ -27,6 +35,6 @@ export function createReconciliationHandler({ service }) {
 }
 let defaultHandler;
 export async function handler(event) {
-  try { defaultHandler ??= createReconciliationHandler({ service: createReconciliationService(createAwsDependencies()) }); return await defaultHandler(event); }
+  try { defaultHandler ??= createReconciliationHandler({ service: createReconciliationService(createAwsDependencies()), accessResolver: resolveAccess }); return await defaultHandler(event); }
   catch (error) { return handleError(error); }
 }

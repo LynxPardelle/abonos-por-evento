@@ -1,21 +1,26 @@
-import { afterNextRender, Component, computed, DestroyRef, effect, ElementRef, inject, signal, viewChild } from '@angular/core';
-import { ActivatedRoute, Router, RouterLink, RouterLinkActive } from '@angular/router';
+import { afterNextRender, Component, computed, DestroyRef, effect, ElementRef, inject, signal, untracked, viewChild } from '@angular/core';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { form, FormField, required, submit } from '@angular/forms/signals';
 import { WorkspaceStore } from './workspace.store';
 import { SessionService } from '../../core/session';
 import { decimalToMinor, formatMinor } from '../../core/money';
 import { ImportRow, Movement } from '../../core/models';
+import { OrganizationStore } from '../../core/organization.store';
+import { OrganizationContext } from '../../core/organization-context';
+import { WorkspaceFrame } from './workspace-frame';
 
 @Component({
   selector: 'app-workspace',
-  imports: [RouterLink, RouterLinkActive, FormField],
+  imports: [RouterLink, FormField, WorkspaceFrame],
   templateUrl: './workspace.html',
   styleUrl: './workspace.scss',
 })
 export class Workspace {
   readonly store = inject(WorkspaceStore);
   readonly session = inject(SessionService);
+  readonly organization = inject(OrganizationStore);
+  private readonly context = inject(OrganizationContext);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly destroy = inject(DestroyRef);
@@ -26,6 +31,15 @@ export class Workspace {
   readonly format = formatMinor;
   readonly selectedFile = signal<File | undefined>(undefined);
   readonly localError = signal('');
+  readonly filterModel = signal({ query: '', state: 'active' });
+  readonly filters = form(this.filterModel);
+  readonly filteredEvents = computed(() => this.store.events().filter(event => {
+    const filter = this.filterModel();
+    return event.name.toLocaleLowerCase('es-MX').includes(filter.query.toLocaleLowerCase('es-MX').trim()) && (filter.state === 'all' || (filter.state === 'archived' ? !!event.archivedAt : !event.archivedAt));
+  }));
+  readonly financialOpen = computed(() => this.store.closing()?.financialStatus === 'open' && !this.store.closing()?.transition && !this.store.event()?.archivedAt);
+  readonly canImport = computed(() => this.organization.can('importPayments') && this.financialOpen());
+  readonly canConfirm = computed(() => this.organization.can('confirmPayments') && this.financialOpen());
   readonly review = signal<{ batchId: string; row: ImportRow } | undefined>(undefined);
   readonly reversing = signal<Movement | undefined>(undefined);
   readonly eventModel = signal({ name: '', currency: 'MXN' });
@@ -42,6 +56,12 @@ export class Workspace {
   private readonly reversalDialog = viewChild<ElementRef<HTMLDialogElement>>('reversalDialog');
 
   constructor() {
+    const unsubscribe = this.context.onChange(() => {
+      this.review.set(undefined); this.reversing.set(undefined); this.selectedFile.set(undefined); this.localError.set('');
+      this.eventModel.set({ name: '', currency: 'MXN' }); this.participantModel.set({ name: '', reference: '', agreed: '' });
+      for (const dialog of [this.manualDialog(), this.confirmDialog(), this.reversalDialog()]) dialog?.nativeElement.close();
+    });
+    this.destroy.onDestroy(unsubscribe);
     afterNextRender(() => {
       void this.session.initialize();
       const interval = setInterval(() => {
@@ -50,11 +70,13 @@ export class Workspace {
       this.destroy.onDestroy(() => clearInterval(interval));
     });
     effect(() => {
-      if (this.session.ready() && this.session.authenticated()) void this.store.load(this.params()?.get('eventId') ?? '');
+      const eventId = this.params()?.get('eventId') ?? '';
+      if (this.session.ready() && this.session.authenticated() && this.organization.current()) untracked(() => { void this.store.load(eventId); });
     });
   }
   async createEvent(event: Event) {
     event.preventDefault();
+    if (!this.organization.can('createEvent')) return;
     await submit(this.eventForm, async () => {
       const created = await this.store.createEvent(this.eventModel().name.trim(), this.eventModel().currency);
       if (created) await this.router.navigate(['/eventos', created.eventId, 'asistentes']);
@@ -62,6 +84,7 @@ export class Workspace {
   }
   async addParticipant(event: Event) {
     event.preventDefault(); this.localError.set('');
+    if (!this.organization.can('manageParticipants') || this.store.event()?.archivedAt) return;
     await submit(this.participantForm, async () => {
       try {
         const value = this.participantModel();
@@ -70,23 +93,26 @@ export class Workspace {
     });
   }
   chooseFile(event: Event) { this.selectedFile.set((event.target as HTMLInputElement).files?.[0]); }
-  async upload(event: Event) { event.preventDefault(); const file = this.selectedFile(); if (file) await this.store.importFile(file); }
+  async upload(event: Event) { event.preventDefault(); const file = this.selectedFile(); if (file && this.canImport()) await this.store.importFile(file); }
+  overviewFor(eventId: string) { return this.store.overview()?.events.find(item => item.event.eventId === eventId); }
   participantName(id: string) { return this.store.participants().find(person => person.participantId === id)?.name ?? id; }
   participantReference(id: string) { return this.store.participants().find(person => person.participantId === id)?.reference ?? '—'; }
   openReview(batchId: string, row: ImportRow) {
+    if (!this.canConfirm()) return;
     this.review.set({ batchId, row });
     this.confirmationModel.set({ participantId: row.suggestedParticipantId ?? row.suggestion?.participantId ?? row.participantId ?? '', acknowledged: false });
     this.confirmDialog()?.nativeElement.showModal();
   }
   async confirm(event: Event) {
     event.preventDefault(); const review = this.review();
-    if (review && this.confirmationModel().acknowledged && this.confirmationModel().participantId) {
+    if (review && this.canConfirm() && this.confirmationModel().acknowledged && this.confirmationModel().participantId) {
       if (await this.store.confirm(review.batchId, review.row.rowId, this.confirmationModel().participantId)) this.confirmDialog()?.nativeElement.close();
     }
   }
   openReversal(movement: Movement) { this.reversing.set(movement); this.reversalDialog()?.nativeElement.showModal(); }
-  async reverse() { const movement = this.reversing(); if (movement && await this.store.reverse(movement.movementId)) this.reversalDialog()?.nativeElement.close(); }
+  async reverse() { const movement = this.reversing(); if (movement && this.organization.can('reversePayments') && this.financialOpen() && await this.store.reverse(movement.movementId)) this.reversalDialog()?.nativeElement.close(); }
   openManual() {
+    if (!this.canConfirm()) return;
     this.manualOperationId = crypto.randomUUID();
     this.manualModel.set({ participantId: '', reference: '', amount: '', acknowledged: false });
     this.localError.set('');
@@ -95,7 +121,7 @@ export class Workspace {
   async saveManual(event: Event) {
     event.preventDefault(); this.localError.set('');
     await submit(this.manualForm, async () => {
-      if (!this.manualModel().acknowledged) return;
+      if (!this.manualModel().acknowledged || !this.canConfirm()) return;
       try {
         const value = this.manualModel();
         if (await this.store.recordPayment({ operationId: this.manualOperationId, participantId: value.participantId, reference: value.reference.trim(), amountMinor: decimalToMinor(value.amount) })) this.manualDialog()?.nativeElement.close();
