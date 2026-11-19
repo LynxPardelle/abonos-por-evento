@@ -1,5 +1,6 @@
-import { Injectable, computed, signal } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
 import { RuntimeConfig } from './models';
+import { OrganizationContext } from './organization-context';
 
 const SESSION_KEY = 'saldoevento.session';
 const PKCE_KEY = 'saldoevento.pkce';
@@ -21,6 +22,7 @@ function storedObject(key: string) {
 
 @Injectable({ providedIn: 'root' })
 export class SessionService {
+  private readonly organization = inject(OrganizationContext);
   readonly ready = signal(false);
   readonly local = signal(false);
   readonly registrationEnabled = signal(false);
@@ -87,6 +89,7 @@ export class SessionService {
   signOut() {
     sessionStorage.removeItem(SESSION_KEY);
     this.token.set('');
+    this.organization.reset();
     if (this.config.cognitoDomain && this.config.clientId) {
       const logout = new URL('/logout', this.config.cognitoDomain);
       logout.search = new URLSearchParams({ client_id: this.config.clientId, logout_uri: location.origin }).toString();

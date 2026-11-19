@@ -17,6 +17,6 @@
   },
   {
     "ParameterKey": "SelfRegistrationEnabled",
-    "ParameterValue": "false"
+    "ParameterValue": "true"
   }
 ]

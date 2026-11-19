@@ -1,15 +1,15 @@
 ---
 goal: Primera versión de SaldoEvento en microservicios AWS con Angular Lambda
-version: '3.0'
+version: '4.0'
 date_created: 2026-11-17
 last_updated: 2026-11-19
-status: 'In progress'
+status: 'Complete'
 tags: [feature, architecture, serverless, angular]
 ---
 
 # Introduction
 
-Estado **In progress**. El producto adopta SaldoEvento y una arquitectura de microservicios serverless con Angular SSR servido por Lambda. La base operativa tiene su evidencia histórica de AWS; la nueva entrega añade landing, registro self-service, diseño comercial y herramientas de promoción a testing. La implementación local aprobó 86 pruebas Node, 15 Angular y build SSR. La ejecución remota se acredita en PR, CI y reportes del ambiente; esos resultados locales no la sustituyen. La promoción es **feature → development → testing**. `main` queda pendiente hasta la prueba del propietario con su cuenta y una instrucción posterior.
+Estado **Complete para la primera versión del piloto**. SaldoEvento está publicado en https://saldoevento.lynxpardelle.com desde main `05b02f31563d88285d22b5085d69d3ba757e6675`, después de los PR #8, #9 y #10 por la cadena development → testing → main. El propietario completó el registro y el flujo real con datos sintéticos en testing y producción: evento, participantes, CSV, dos confirmaciones, saldos, reverso e historial tras recarga. El resultado final fue 750.00 MXN confirmados y 1250.00 MXN pendientes. Stripe y Checkout permanecen desactivados. Las capacidades nuevas por tier se desarrollan en un [plan independiente](feature-subscription-tiers-1.md) y requieren su propia verificación antes de publicarse.
 
 ## 1. Requirements & Constraints
 
@@ -24,7 +24,7 @@ Estado **In progress**. El producto adopta SaldoEvento y una arquitectura de mic
 - **CON-002** Los ejemplos y los pilotos automáticos usan datos sintéticos. La aceptación con datos de un organizador requiere su escenario autorizado.
 - **CON-003** Stripe, Checkout, entitlements pagados, precios e invitaciones de equipo permanecen pendientes. Un registro no contrata un tier futuro ni programa un cargo.
 - **PAT-001** Angular standalone, rutas lazy, Signal Forms y SignalStore por flujo. Frontend SSR/Express en Lambda, Function URL IAM y CloudFront OAC; assets S3 privado y API sin caché.
-- **PAT-002** Desarrollo sigue development, pruebas testing y producción main. La implementación se prepara en una rama feature basada en development y no cambia la rama main del checkout original.
+- **PAT-002** Desarrollo sigue development, pruebas testing y producción main. La implementación se prepara en una rama feature basada en development; cada promoción se realiza mediante PR con verificaciones y la publicación requiere autorización.
 
 ## 2. Implementation Steps
 
@@ -88,17 +88,19 @@ Estado **In progress**. El producto adopta SaldoEvento y una arquitectura de mic
 
 | Task | Description | Completed | Date |
 | --- | --- | --- | --- |
-| TASK-014 | Subir la rama feature, crear e integrar PR a development tras comprobar su HEAD; promover development → testing con merge commit y checks. Usar Deploy-Testing.ps1 con commit remoto/artefacto verificados y change set revisado; probar landing/registro y smoke-testing.mjs con cuentas sintéticas y limpieza. | Herramientas implementadas y probadas localmente; ejecución y resultados se acreditan en los enlaces/reportes de entrega | 2026-11-19 |
+| TASK-014 | Subir la rama feature, crear e integrar PR a development tras comprobar su HEAD; promover development → testing con merge commit y checks. Usar Deploy-Testing.ps1 con commit remoto/artefacto verificados y change set revisado; probar landing/registro y smoke-testing.mjs con cuentas sintéticas y limpieza. | Completado: PR #8 a development y #9 a testing integrados; CI y 13 checks cloud por ambiente aprobados, cuatro identidades temporales retiradas por ambiente | 2026-11-19 |
 
 Estado remoto de TASK-014: [PR a development](https://github.com/LynxPardelle/abonos-por-evento/pulls?q=is%3Apr+base%3Adevelopment), [PR a testing](https://github.com/LynxPardelle/abonos-por-evento/pulls?q=is%3Apr+base%3Atesting) y [CI](https://github.com/LynxPardelle/abonos-por-evento/actions/workflows/ci.yml). Los reportes del commit desplegado se guardan en `artifacts/deployments/dev/cloud-smoke.json` y `artifacts/deployments/test/cloud-smoke.json`. [Procedimiento y criterios de cierre](../docs/runbooks/testing-promotion.md). No se infiere aprobación cloud de las pruebas locales ni del historial de la base anterior.
 
 ### Implementation Phase 8
 
-**GOAL-008** Aceptación de la cuenta real antes de main.
+**GOAL-008** Aceptación real, publicación autorizada y validación de producción.
 
 | Task | Description | Completed | Date |
 | --- | --- | --- | --- |
-| TASK-009 | El propietario completa registro, recepción de correo, acceso PKCE y escenario autorizado con su cuenta en testing. Revisar resultados y operación; esperar una instrucción posterior antes de promover a main o publicar saldoevento.lynxpardelle.com. | Pendiente de prueba humana; main se mantiene pendiente | |
+| TASK-009 | El propietario completa el registro y acceso PKCE con su cuenta; ejecutar el escenario autorizado, recibir la aprobación de producción y promover a main con verificaciones. | Completado: aceptación testing, aprobación explícita, PR #10 integrado y producción CREATE_COMPLETE; cuenta real y recorrido funcional de producción completados con persistencia tras recargas | 2026-11-19 |
+
+Evidencia durable: [validación de producción](../docs/verificacion/production-2026-11-19.json). [PR #10 y comprobante de publicación](https://github.com/LynxPardelle/abonos-por-evento/pull/10#issuecomment-7023051899). La verificación pública previa cubrió cuatro rutas SSR, doce assets con hashes correctos, salud, configuración, Cognito y dos rechazos 401. La aceptación posterior con cuenta real acredita el flujo autenticado y se distingue de aquellos GET de sólo lectura. No se guardan correo, contraseña, OTP, tokens, cookies ni identificadores de la cuenta en el reporte versionado.
 
 ## 3. Alternatives
 
