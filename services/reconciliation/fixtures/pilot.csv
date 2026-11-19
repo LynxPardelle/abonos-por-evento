@@ -1,0 +1,5 @@
+provider,movement_id,participant_reference,amount,currency
+bank,synthetic-100,ANA,1000.00,MXN
+bank,synthetic-200,ANA,750.00,MXN
+bank,synthetic-300,SHARED,25.00,MXN
+bank,synthetic-400,ANA,12.345,MXN

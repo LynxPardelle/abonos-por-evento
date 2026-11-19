@@ -1,0 +1,26 @@
+import { Injectable, inject } from '@angular/core';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { firstValueFrom } from 'rxjs';
+import { SessionService } from './session';
+
+@Injectable({ providedIn: 'root' })
+export class ApiClient {
+  private readonly http = inject(HttpClient);
+  private readonly session = inject(SessionService);
+  request<T>(method: string, path: string, body?: unknown): Promise<T> {
+    const token = this.session.token();
+    const headers = token ? new HttpHeaders({ Authorization: `Bearer ${token}` }) : new HttpHeaders();
+    return firstValueFrom(this.http.request<T>(method, `/api/v1${path}`, { body, headers })).catch(error => {
+      if (error.status === 401) {
+        sessionStorage.removeItem('saldoevento.session');
+        this.session.token.set('');
+        this.session.message.set('La sesión venció. Vuelve a entrar para continuar.');
+      }
+      throw error;
+    });
+  }
+  async upload(url: string, file: File, headers: Record<string, string>) {
+    const response = await fetch(url, { method: 'PUT', headers, body: file });
+    if (!response.ok) throw new Error('La carga no se completó. Puedes volver a enviar el mismo archivo.');
+  }
+}
