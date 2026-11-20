@@ -18,7 +18,7 @@ También se registra un abono manual cuando el operador ya verificó un comproba
 
 Una aplicación Angular con landing, pantalla de registro, rutas operativas, estado por flujo y frontend SSR servido por Lambda. Los dominios Eventos y Conciliación tienen Lambdas y almacenamiento separados. El importador procesa archivos de manera asíncrona y los errores agotados quedan en DLQ. Identidad conserva membresías en IdentityTable y emite los claims de organización/rol mediante triggers del servidor.
 
-La URL publicada del piloto es **https://saldoevento.lynxpardelle.com**. Desarrollo y pruebas usan `saldoevento-dev` y `saldoevento-test` bajo el mismo dominio.
+La dirección principal de producción de esta entrega es **https://saldoevento.zooberiahsystems.com**, conservando **https://saldoevento.lynxpardelle.com** como dirección compatible. Desarrollo y pruebas conservan `saldoevento-dev.lynxpardelle.com` y `saldoevento-test.lynxpardelle.com`. La migración mantiene cuentas y datos; el acceso desde el origen nuevo usa el flujo normal de Cognito. Su disponibilidad se acredita en el comprobante del PR de producción.
 
 ## Modelo comercial
 

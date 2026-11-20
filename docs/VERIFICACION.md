@@ -2,6 +2,14 @@
 
 Fecha de trabajo: 19 de noviembre de 2026. Este registro distingue la base histórica, el piloto publicado y el incremento local de suscripciones. Los resultados iniciales que siguen se conservan con su alcance original.
 
+## Actualización: tiers aceptados en testing y promoción aprobada
+
+El incremento completó development → testing mediante los PR #11–#14. El commit testing `d752d26c23b8afcc60ef13c64b5f2c4166162e48` aprobó CI con 171 pruebas Node y 34 Angular, SSR, paquete y validación SAM. El stack terminó UPDATE_COMPLETE; la verificación pública, el smoke financiero y los escenarios de tiers/cuotas/permisos en AWS aprobaron. [Comprobante durable](https://github.com/LynxPardelle/abonos-por-evento/pull/14#issuecomment-7025587666).
+
+La [aceptación posterior con la cuenta del propietario](verificacion/testing-tiers-owner-2026-11-19.json) verificó plantillas, dos cierres, exportación histórica idéntica, archivo/reapertura y roles/revocación de Equipo con el mismo JWT. El colaborador temporal se retiró; la cuenta y los datos anteriores permanecieron. El reporte es un snapshot de esa validación, cuando main aún esperaba aprobación; la aprobación expresa recibida después autoriza esta entrega a main y producción en `saldoevento.zooberiahsystems.com`.
+
+La migración usa el mismo stack y conserva el dominio anterior compatible, identidades y datos. El comprobante del PR de producción debe aportar el commit efectivo, CI, huella del paquete, revisión del change set, recursos preservados y verificaciones de ambos dominios. La aceptación de testing no se presenta como una nueva sesión humana en producción. Stripe permanece desactivado. Las secciones siguientes conservan sus fechas y alcance históricos.
+
 ## Evidencia local
 
 - `npm test`: 69 pruebas Node aprobadas, sin omisiones. Incluye ledger, CSV, idempotencia, concurrencia, reversos, roles, tenant, DynamoDB inyectado, worker, API local, empaquetado, contratos SAM y herramientas de despliegue/smoke con proveedores simulados.

@@ -5,15 +5,15 @@
   },
   {
     "ParameterKey": "CertificateArn",
-    "ParameterValue": "arn:aws:acm:us-east-1:765932874577:certificate/4b008cec-97a6-447e-bf2f-9165e435b363"
+    "ParameterValue": "arn:aws:acm:us-east-1:765932874577:certificate/1e63f18f-d358-4079-be57-2ebb7047432a"
   },
   {
     "ParameterKey": "HostedZoneId",
-    "ParameterValue": "Z05088763QG63CC5SE7PN"
+    "ParameterValue": "Z00733952JM7567FL6HXC"
   },
   {
     "ParameterKey": "PublicOrigin",
-    "ParameterValue": "https://saldoevento.lynxpardelle.com"
+    "ParameterValue": "https://saldoevento.zooberiahsystems.com"
   },
   {
     "ParameterKey": "SelfRegistrationEnabled",

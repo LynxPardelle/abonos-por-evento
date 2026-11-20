@@ -101,6 +101,21 @@ test("preview performs only two configuration reads and never invokes the writer
   assert.equal(preview.functionName, "saldoevento-test-identity-admin");
 });
 
+test("production preview requires the new primary domain without changing its identity function", async () => {
+  const options = cli.parseGrantArgs(argv.map(value => value === 'saldoevento-test' ? 'saldoevento-prod' : value));
+  const production = {
+    ...stack, StackName: 'saldoevento-prod',
+    Parameters: [{ ParameterKey: 'Stage', ParameterValue: 'prod' }, { ParameterKey: 'PublicOrigin', ParameterValue: 'https://saldoevento.zooberiahsystems.com' }],
+    Outputs: stack.Outputs.map(item => ({ ...item, OutputValue: item.OutputKey === 'ProductDomain' ? 'saldoevento.zooberiahsystems.com' : item.OutputKey === 'IdentityAdminFunctionName' ? 'saldoevento-prod-identity-admin' : item.OutputValue })),
+  };
+  const readAws = service => service === 'sts' ? { Account: '765932874577' } : production;
+  const preview = await cli.runGrant(options, { readAws });
+  assert.equal(preview.status, 'preview');
+  assert.equal(preview.functionName, 'saldoevento-prod-identity-admin');
+  assert.equal(preview.payload.internal.userPoolId, 'us-east-1_Synthetic');
+  await assert.rejects(cli.runGrant(options, { readAws: service => service === 'sts' ? { Account: '765932874577' } : { ...production, Parameters: production.Parameters.map(item => item.ParameterKey === 'PublicOrigin' ? { ...item, ParameterValue: 'https://saldoevento.lynxpardelle.com' } : item) } }), /STACK_TARGET_MISMATCH/);
+});
+
 test("execute invokes only the guarded admin function and preserves the operation ID", async () => {
   assert.equal(typeof cli.runGrant, "function");
   let captured;
