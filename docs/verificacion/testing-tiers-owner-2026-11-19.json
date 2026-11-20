@@ -1,0 +1,143 @@
+{
+  "schemaVersion": 2,
+  "product": "SaldoEvento",
+  "environment": "testing",
+  "sourceCommit": "d752d26c23b8afcc60ef13c64b5f2c4166162e48",
+  "status": "passed",
+  "account": "owner authenticated through Cognito and browser workspace observed",
+  "plan": "team",
+  "data": "new synthetic events and participants; previous event preserved",
+  "template": {
+    "participants": 2,
+    "status": "passed",
+    "paidMinor": "0",
+    "pendingMinor": "200000",
+    "movements": 0
+  },
+  "firstClosure": {
+    "movements": 2,
+    "status": "passed",
+    "paidMinor": "125000",
+    "pendingMinor": "75000",
+    "ledgerVersion": 2
+  },
+  "archiveReopen": {
+    "status": "passed",
+    "activeAfterReopen": 3,
+    "activeAfterArchive": 2,
+    "ledgerVersionAfterReopen": 2,
+    "historyPreserved": true,
+    "activeBeforeArchive": 3
+  },
+  "secondClosure": {
+    "movements": 3,
+    "status": "passed",
+    "paidMinor": "150000",
+    "pendingMinor": "50000",
+    "ledgerVersion": 3
+  },
+  "exports": {
+    "status": "passed",
+    "historicalIdentical": true,
+    "firstClosureSha256": "0baed6b7be2e580c9e15a897ca6069d28efb58690f03f0801b908d17ec1e2358",
+    "secondClosureSha256": "89b63ae8a971378dccc61efc98305152df77627c99bf13497333e2c04ea6d3ca",
+    "secondClosurePaid": 1500.0,
+    "secondClosurePending": 500.0,
+    "secondClosureMovements": 3
+  },
+  "reload": {
+    "status": "passed",
+    "closures": 2,
+    "financialStatus": "closed",
+    "ledgerVersion": 3
+  },
+  "team": {
+    "scope": "new synthetic event only",
+    "events": [
+      {
+        "at": "2026-11-20T00:31:14.788Z",
+        "event": "check_readonly",
+        "status": "passed",
+        "visibleEvents": 1,
+        "participants": 2,
+        "crossScopeStatus": 404,
+        "paymentStatus": 403,
+        "paymentWritten": false
+      },
+      {
+        "at": "2026-11-20T00:31:55.096Z",
+        "event": "check_confirmer",
+        "status": "passed",
+        "confirm": true,
+        "import": false,
+        "create": false,
+        "ledgerVersion": 2,
+        "paymentWritten": false
+      },
+      {
+        "at": "2026-11-20T00:32:18.518Z",
+        "event": "record_payment",
+        "status": "passed",
+        "amountMinor": "25000",
+        "replayed": false,
+        "ledgerVersion": 3
+      },
+      {
+        "at": "2026-11-20T00:33:01.589Z",
+        "event": "check_operator",
+        "status": "passed",
+        "globalActionsAllowed": false,
+        "createStatus": 403,
+        "crossScopeStatus": 404,
+        "eventWritten": false
+      },
+      {
+        "at": "2026-11-20T00:33:59.963Z",
+        "event": "check_revoked",
+        "status": "passed",
+        "scopedStatus": 403,
+        "personalHomePreserved": true,
+        "sameToken": true
+      },
+      {
+        "at": "2026-11-20T00:34:14.215Z",
+        "event": "cleanup",
+        "temporaryAccountDeleted": true
+      }
+    ],
+    "ownerProtected": true,
+    "authorization": "temporary collaborator HTTP with the same JWT, without refresh",
+    "management": "owner browser UI",
+    "cleanup": {
+      "checkedAt": "2026-11-20T00:34:54.9603956Z",
+      "environment": "testing",
+      "totalAccounts": 1,
+      "originalAccounts": 1,
+      "temporaryAccounts": 0,
+      "cleanupConfirmed": true
+    }
+  },
+  "finalCapacity": {
+    "activeSeats": 1,
+    "maxEvents": 20,
+    "activeEvents": 3,
+    "maxSeats": 5
+  },
+  "billingEnabled": false,
+  "stripeEnabled": false,
+  "checkoutUsed": false,
+  "main": {
+    "promoted": false,
+    "approval": "pending explicit owner instruction",
+    "commit": "05b02f31563d88285d22b5085d69d3ba757e6675"
+  },
+  "sourceFilesChanged": false,
+  "productionChanged": false,
+  "completedAt": "2026-11-20T00:36:10.3969752Z",
+  "limitations": [
+    "Team owner workflows were tested in the real browser; collaborator permissions were tested by HTTP, not a second human browser session.",
+    "No paid subscription, billing period, invitation delivery or Stripe flow was activated.",
+    "Individual 1-event and 5-event quota assignments were not changed on the owner account."
+  ],
+  "privacy": "No email, password, JWT, cookies, OAuth code, user subject or real account/organization identifiers."
+}

@@ -41,4 +41,5 @@ jobs:
         with:
           name: saldoevento-frontend-${{ github.sha }}
           path: artifacts/frontend
+          include-hidden-files: true
           retention-days: 14

@@ -37,13 +37,18 @@ Mappings:
     test:
       DomainName: saldoevento-test.lynxpardelle.com
     prod:
-      DomainName: saldoevento.lynxpardelle.com
+      DomainName: saldoevento.zooberiahsystems.com
+      LegacyDomainName: saldoevento.lynxpardelle.com
+      LegacyHostedZoneId: Z05088763QG63CC5SE7PN
 Conditions:
   IsNonProduction:
     Fn::Not:
       - Fn::Equals:
           - Ref: Stage
           - prod
+  IsProduction:
+    Fn::Not:
+      - Condition: IsNonProduction
   SelfRegistrationAllowed:
     Fn::Equals:
       - Ref: SelfRegistrationEnabled
@@ -63,6 +68,10 @@ Conditions:
           - Fn::Equals:
               - Ref: HostedZoneId
               - ""
+  ProdCustomDomain:
+    Fn::And:
+      - Condition: IsProduction
+      - Condition: CustomDomainEnabled
 Globals:
   Function:
     Runtime: nodejs24.x
@@ -317,6 +326,17 @@ Resources:
                             - Ref: Stage
                             - DomainName
               - /auth/callback
+        - Fn::If:
+            - IsProduction
+            - Fn::Join:
+                - ""
+                - - https://
+                  - Fn::FindInMap:
+                      - Environments
+                      - prod
+                      - LegacyDomainName
+                  - /auth/callback
+            - Ref: AWS::NoValue
       LogoutURLs:
         - Fn::If:
             - HasPublicOrigin
@@ -328,6 +348,16 @@ Resources:
                       - Environments
                       - Ref: Stage
                       - DomainName
+        - Fn::If:
+            - IsProduction
+            - Fn::Join:
+                - ""
+                - - https://
+                  - Fn::FindInMap:
+                      - Environments
+                      - prod
+                      - LegacyDomainName
+            - Ref: AWS::NoValue
   BusinessApi:
     Type: AWS::Serverless::HttpApi
     Properties:
@@ -366,6 +396,16 @@ Resources:
                         - Environments
                         - Ref: Stage
                         - DomainName
+          - Fn::If:
+              - IsProduction
+              - Fn::Join:
+                  - ""
+                  - - https://
+                    - Fn::FindInMap:
+                        - Environments
+                        - prod
+                        - LegacyDomainName
+              - Ref: AWS::NoValue
         MaxAge: 300
   EventsTable:
     Type: AWS::DynamoDB::Table
@@ -519,6 +559,16 @@ Resources:
                             - Environments
                             - Ref: Stage
                             - DomainName
+              - Fn::If:
+                  - IsProduction
+                  - Fn::Join:
+                      - ""
+                      - - https://
+                        - Fn::FindInMap:
+                            - Environments
+                            - prod
+                            - LegacyDomainName
+                  - Ref: AWS::NoValue
             MaxAge: 300
       NotificationConfiguration:
         QueueConfigurations:
@@ -1031,6 +1081,13 @@ Resources:
                     - Environments
                     - Ref: Stage
                     - DomainName
+                - Fn::If:
+                    - IsProduction
+                    - Fn::FindInMap:
+                        - Environments
+                        - prod
+                        - LegacyDomainName
+                    - Ref: AWS::NoValue
                 - "*.cloudfront.net"
                 - Fn::Sub: "*.lambda-url.${AWS::Region}.on.aws"
       Policies: []
@@ -1093,6 +1150,13 @@ Resources:
                   - Environments
                   - Ref: Stage
                   - DomainName
+              - Fn::If:
+                  - IsProduction
+                  - Fn::FindInMap:
+                      - Environments
+                      - prod
+                      - LegacyDomainName
+                  - Ref: AWS::NoValue
             - Ref: AWS::NoValue
         ViewerCertificate:
           Fn::If:
@@ -1334,6 +1398,68 @@ Resources:
     Condition: CustomDomainEnabled
     Properties:
       HostedZoneId:
+        Fn::If:
+          - IsProduction
+          - Fn::FindInMap:
+              - Environments
+              - prod
+              - LegacyHostedZoneId
+          - Ref: HostedZoneId
+      Name:
+        Fn::If:
+          - IsProduction
+          - Fn::FindInMap:
+              - Environments
+              - prod
+              - LegacyDomainName
+          - Fn::FindInMap:
+              - Environments
+              - Ref: Stage
+              - DomainName
+      Type: A
+      AliasTarget:
+        DNSName:
+          Fn::GetAtt:
+            - FrontendDistribution
+            - DomainName
+        HostedZoneId: Z2FDTNDATAQYW2
+        EvaluateTargetHealth: false
+  FrontendDnsAAAA:
+    Type: AWS::Route53::RecordSet
+    Condition: CustomDomainEnabled
+    Properties:
+      HostedZoneId:
+        Fn::If:
+          - IsProduction
+          - Fn::FindInMap:
+              - Environments
+              - prod
+              - LegacyHostedZoneId
+          - Ref: HostedZoneId
+      Name:
+        Fn::If:
+          - IsProduction
+          - Fn::FindInMap:
+              - Environments
+              - prod
+              - LegacyDomainName
+          - Fn::FindInMap:
+              - Environments
+              - Ref: Stage
+              - DomainName
+      Type: AAAA
+      AliasTarget:
+        DNSName:
+          Fn::GetAtt:
+            - FrontendDistribution
+            - DomainName
+        HostedZoneId: Z2FDTNDATAQYW2
+        EvaluateTargetHealth: false
+  PrimaryFrontendDnsA:
+    Type: AWS::Route53::RecordSet
+    Condition: ProdCustomDomain
+    Properties:
+      HostedZoneId:
         Ref: HostedZoneId
       Name:
         Fn::FindInMap:
@@ -1348,9 +1474,9 @@ Resources:
             - DomainName
         HostedZoneId: Z2FDTNDATAQYW2
         EvaluateTargetHealth: false
-  FrontendDnsAAAA:
+  PrimaryFrontendDnsAAAA:
     Type: AWS::Route53::RecordSet
-    Condition: CustomDomainEnabled
+    Condition: ProdCustomDomain
     Properties:
       HostedZoneId:
         Ref: HostedZoneId
