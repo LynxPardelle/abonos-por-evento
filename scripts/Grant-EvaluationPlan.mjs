@@ -17,7 +17,7 @@ const targets = Object.freeze({
   },
   "saldoevento-prod": {
     stage: "prod",
-    origin: "https://saldoevento.lynxpardelle.com",
+    origin: "https://saldoevento.zooberiahsystems.com",
   },
 });
 const requireCheck = (ok, code) => {
