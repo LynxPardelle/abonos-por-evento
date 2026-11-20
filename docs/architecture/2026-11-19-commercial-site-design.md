@@ -2,6 +2,8 @@
 
 **Fecha:** 19 de noviembre de 2026. **Estado:** diseño para la implementación solicitada. La disponibilidad de registro y las promociones se acreditan con sus verificaciones; este documento no activa cobros ni autoriza producción.
 
+**Actualización posterior:** el piloto de este diseño ya se publicó con aprobación del propietario mediante PR #10 y fue validado con su cuenta en producción. Las menciones a main pendiente que siguen describen el punto de decisión original. El nuevo incremento de capacidades por tier conserva su [plan separado](../../plan/feature-subscription-tiers-1.md) y permanece local.
+
 ## Objetivo
 
 La primera visita debe explicar qué consigue el producto y conducir a una cuenta de piloto. El recorrido de trabajo se mantiene separado de la explicación comercial: `/` presenta SaldoEvento y `/app` abre el espacio operativo. El registro crea una organización aislada desde el servidor. La rama `main` queda pendiente hasta que el propietario pueda probarlo con su cuenta.

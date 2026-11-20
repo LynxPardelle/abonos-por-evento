@@ -18,17 +18,28 @@ También se registra un abono manual cuando el operador ya verificó un comproba
 
 Una aplicación Angular con landing, pantalla de registro, rutas operativas, estado por flujo y frontend SSR servido por Lambda. Los dominios Eventos y Conciliación tienen Lambdas y almacenamiento separados. El importador procesa archivos de manera asíncrona y los errores agotados quedan en DLQ. Identidad conserva membresías en IdentityTable y emite los claims de organización/rol mediante triggers del servidor.
 
-La URL de producto prevista es **https://saldoevento.lynxpardelle.com**. Desarrollo y pruebas usan `saldoevento-dev` y `saldoevento-test` bajo el mismo dominio.
+La dirección principal de producción de esta entrega es **https://saldoevento.zooberiahsystems.com**, conservando **https://saldoevento.lynxpardelle.com** como dirección compatible. Desarrollo y pruebas conservan `saldoevento-dev.lynxpardelle.com` y `saldoevento-test.lynxpardelle.com`. La migración mantiene cuentas y datos; el acceso desde el origen nuevo usa el flujo normal de Cognito. Su disponibilidad se acredita en el comprobante del PR de producción.
 
 ## Modelo comercial
 
-El **Piloto** permite probar las capacidades actuales sin tarjeta donde el registro esté habilitado. Los tiers **Por Evento**, **Organizador** y **Equipo** están en diseño: conservan el modelo por evento y proponen suscripción mensual/anual para trabajo recurrente o compartido. Los precios y cuotas aún no están aprobados ni aplicados por el backend. La primera versión no incorpora Checkout, facturación, cobros Stripe ni procesamiento de pagos a participantes.
+El **Piloto** permite registrar eventos, participantes, importaciones, confirmaciones, saldos y reversos sin tarjeta. El incremento de evaluación implementa capacidades para **Por Evento**, **Organizador** y **Equipo**, asignadas por un administrador con IAM. Los modelos de venta por evento y mensual/anual siguen por validar; no hay precio aprobado, contratación, Checkout ni cobros Stripe.
 
-[PLANES.md](PLANES.md) separa las funciones disponibles, las propuestas de cada tier y los criterios que faltan para venderlo. La landing no debe anunciar invitaciones de equipo, exportación, integración bancaria, auditoría completa o SLA como prestaciones entregadas. Medir tiempo de cierre, movimientos sin asignar, correcciones y repetición de uso antes de fijar un precio.
+| Evaluación | Eventos en trabajo / personas | Capacidades implementadas en el incremento local |
+| --- | --- | --- |
+| Piloto | Sin nueva cuota comercial / 1 | Flujo básico existente; conserva sus registros. |
+| Por Evento | 1 / 1 | Piloto más cierre financiero con fotografía inmutable y exportación CSV. |
+| Organizador | 5 / 1 | Por Evento más plantillas de preparación y vista de eventos en trabajo por moneda. |
+| Equipo | 20 / 5 | Organizador más colaboradores con alta asistida, roles, alcance por evento y revocación por el propietario. |
+
+Un evento cerrado sigue en trabajo hasta archivarlo. Archivar libera cupo sin borrar movimientos ni reportes; reabrir comprueba capacidad antes de permitir operaciones financieras. El cierre fija el ledger y la lista capturada para el reporte, sin congelar toda la información del evento. Una plantilla copia únicamente participantes, referencias e importes acordados; el evento nuevo comienza sin abonos. El cupo de personas incluye al propietario y a los auditores.
+
+[PLANES.md](PLANES.md) distingue las capacidades implementadas localmente de las ya publicadas y los criterios pendientes para venderlas. No anunciar funciones locales como disponibles en producción antes de desplegarlas y verificarlas. Las invitaciones por enlace, la integración bancaria, la auditoría universal y un SLA quedan pendientes. Medir tiempo de cierre, movimientos sin asignar, correcciones y repetición de uso antes de fijar un precio.
 
 ## Aceptación y promoción
 
-La entrega se integra mediante PR a `development` y se promueve a `testing` con verificaciones del mismo commit. El estado de ejecución se consulta en los PR, CI y reportes del ambiente. **`main` queda pendiente hasta que el propietario complete la prueba con su cuenta**, incluida la recepción del correo, el registro y un cierre autorizado. Las pruebas administrativas sintéticas no sustituyen esa aceptación.
+El piloto completó **development → testing → main** con los PR #8, #9 y #10. El propietario autorizó producción y completó el registro y el flujo real con datos sintéticos: dos confirmaciones sumaron 1250.00 MXN, un reverso de 500.00 dejó 750.00 confirmados, 1250.00 pendientes y tres movimientos conservados tras recargar. [Evidencia de producción](verificacion/production-2026-11-19.json).
+
+El incremento de suscripciones está implementado y verificado localmente en `codex/subscription-tiers`, basado en development. **Todavía no está desplegado** y requiere promoción y aceptación propias. [Plan del incremento](../plan/feature-subscription-tiers-1.md). La aceptación del piloto no acredita los cierres ni las capacidades nuevas en AWS.
 
 ## Identidad del producto
 

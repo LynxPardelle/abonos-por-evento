@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "product": "SaldoEvento",
+  "environment": "local",
+  "branch": "codex/subscription-tiers",
+  "baseCommit": "71140ec05bc7620074f7ec2c7f4b7d9ee0c45e66",
+  "implementationState": "local branch; not deployed",
+  "date": "2026-11-19",
+  "verification": {
+    "nodeTests": 161,
+    "angularTests": 33,
+    "angularTestFiles": 11,
+    "buildSsr": "passed",
+    "frontendPackage": "passed",
+    "frontendLambdaSmoke": {
+      "status": "passed",
+      "htmlRoutes": 5,
+      "configuration": "cloud",
+      "hostOverride": "rejected",
+      "cache": "no-store"
+    },
+    "infraContract": "passed",
+    "cfnLint": { "version": "1.60.1", "templates": 2, "status": "passed" },
+    "independentBackendReview": "no outstanding high or medium findings"
+  },
+  "browserAcceptance": {
+    "data": "synthetic, loopback API and memory repositories",
+    "plan": "team, manual evaluation fixture",
+    "templateSaveAndApply": "passed; two new participants, no confirmed money copied",
+    "payment": { "currency": "MXN", "confirmedMinor": "50000", "pendingMinor": "150000" },
+    "financialClose": "passed; immutable snapshot at ledger version 1",
+    "report": "CSV downloaded and contents checked",
+    "archive": "passed; active events decreased from 2 to 1",
+    "reopen": "passed; active events returned to 2 and closure remained available",
+    "overview": { "currency": "MXN", "confirmedMinor": "50000", "pendingMinor": "350000", "activeOnly": true },
+    "revokeCollaborator": "passed; state revoked, active seats decreased from 2 to 1"
+  },
+  "production": {
+    "modifiedByThisIncrement": false,
+    "previousPublishedCommit": "05b02f31563d88285d22b5085d69d3ba757e6675",
+    "acceptanceEvidence": "production-2026-11-19.json"
+  },
+  "billingEnabled": false,
+  "stripeEnabled": false,
+  "cloudVerificationOfThisIncrement": "pending",
+  "privacy": "No real account identifiers, email, credentials, tokens or private production event identifiers."
+}

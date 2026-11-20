@@ -1,6 +1,6 @@
 # Promoción de SaldoEvento a testing
 
-La entrega sigue **feature → development → testing**. La rama `main` y el ambiente de producción permanecen pendientes hasta la prueba con la cuenta real del propietario. Este procedimiento no publica a producción.
+La entrega sigue **feature → development → testing**, antes de una promoción separada a main. El piloto ya completó la aceptación real y se publicó mediante PR #10 en main `05b02f3`. El incremento de suscripciones continúa local y necesita sus propias verificaciones y aceptación. Este procedimiento no publica a producción ni habilita Stripe.
 
 ## Controles remotos verificados
 
@@ -65,6 +65,24 @@ El smoke acredita Cognito/JWT, API, carga S3, importación por SQS, abonos, reve
 
 La autenticación administrativa IAM del smoke sólo se habilita en dev/test. No habilita un grant de contraseña público y no se habilita en producción. La aplicación pública utiliza Authorization Code con PKCE.
 
+## Capacidades de evaluación
+
+El incremento de suscripciones requiere también el smoke exclusivo de testing:
+
+```powershell
+node scripts/smoke-subscriptions-testing.mjs --region us-east-1
+```
+
+Además del flujo básico de CSV/S3/SQS, esta prueba debe comprobar planes actuales, cupos, detalle de evento por HTTP, cierre y CSV histórico, archivo/reapertura, plantillas, vista por moneda y colaboración con revocación usando identidades temporales. El reporte no debe contener sujetos, organizaciones o eventos privados, correos, contraseñas, tokens ni URL firmadas. Deben retirarse todas las cuentas temporales antes de declarar éxito. Las fronteras de 20 eventos y 5 personas de Equipo se cubren con pruebas de concurrencia; el smoke no necesita crear 21 eventos o seis personas para repetirlas.
+
+El recibo de despliegue debe fijar el SHA de testing, la CI aprobada para ese SHA, la huella del frontend, el change set ejecutado, el estado final del stack y los resultados sanitizados. Comprobar también HTML/configuración, hashes de assets públicos, rechazos sin JWT y preflight del header de organización. Esos resultados no sustituyen la prueba del propietario con su cuenta antes de main.
+
+## Recuperación de una entrega
+
+Se revisa el change set antes de ejecutarlo; tablas, pool y buckets existentes se conservan. Los bundles JS/CSS versionados del artefacto verificado pueden precargarse únicamente al bucket de testing antes de actualizar la Lambda SSR, sin borrados, para reducir la ventana entre HTML nuevo y publicación de assets. El script termina publicando los assets restantes.
+
+Retener los datos no hace seguro volver a cualquier backend anterior. Después de crear cierres, planes o colaboradores, no se debe restaurar el backend del piloto `05b02f3` para seguir operando: no entiende el estado financiero cerrado, las cuotas ni la revocación actual. Si falla el incremento después de introducir ese estado, se detienen mutaciones en testing y se corrige hacia adelante o se restaura una versión compatible con esos controles. No borrar el historial ni alterar el ledger para simular una recuperación.
+
 ## Criterio para cerrar esta promoción
 
-PR de feature integrado en development; PR development → testing integrado con sus checks aprobados; stack testing completo; landing y formulario de registro visibles; smoke testing aprobado y cuatro identidades temporales retiradas. La siguiente promoción a main requiere la prueba de la cuenta real del propietario y una instrucción posterior.
+PR de feature integrado en development; PR development → testing integrado con sus checks aprobados; stack testing completo; landing y formulario de registro visibles; smoke básico y smoke de tiers aprobados y todas sus identidades temporales retiradas. La siguiente promoción a main requiere la prueba de los tiers con la cuenta real del propietario y una instrucción posterior. Stripe y Checkout continúan desactivados.

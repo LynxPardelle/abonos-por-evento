@@ -5,6 +5,26 @@ import { parse } from 'yaml';
 
 const template = parse(await readFile(new URL('./template.yaml', import.meta.url), 'utf8'));
 const resources = template.Resources;
+const absent = Symbol('AWS::NoValue');
+// Resolve only the CloudFormation expressions used by the public-domain contract.
+function domainValue(value, stage, custom = true) {
+  const parameters = { Stage: stage, PublicOrigin: `https://${template.Mappings.Environments[stage].DomainName}`, HostedZoneId: stage === 'prod' ? 'Z00733952JM7567FL6HXC' : 'Z05088763QG63CC5SE7PN', CertificateArn: custom ? 'synthetic-certificate' : '', 'AWS::Region': 'us-east-1' };
+  const resolve = input => {
+    if (Array.isArray(input)) return input.map(resolve).filter(item => item !== absent);
+    if (!input || typeof input !== 'object') return input;
+    if (input.Ref) return input.Ref === 'AWS::NoValue' ? absent : parameters[input.Ref];
+    if (input.Condition) return resolve(template.Conditions[input.Condition]);
+    if (input['Fn::Not']) return !resolve(input['Fn::Not'][0]);
+    if (input['Fn::And']) return input['Fn::And'].every(resolve);
+    if (input['Fn::Equals']) { const [left, right] = input['Fn::Equals'].map(resolve); return left === right; }
+    if (input['Fn::If']) { const [condition, yes, no] = input['Fn::If']; return resolve(resolve(template.Conditions[condition]) ? yes : no); }
+    if (input['Fn::FindInMap']) { const [name, entry, key] = input['Fn::FindInMap'].map(resolve); return template.Mappings[name][entry][key]; }
+    if (input['Fn::Join']) { const [separator, parts] = input['Fn::Join']; return resolve(parts).join(separator); }
+    if (input['Fn::Sub']) return input['Fn::Sub'].replace(/\$\{([^}]+)\}/g, (match, key) => parameters[key] ?? match);
+    return Object.fromEntries(Object.entries(input).map(([key, child]) => [key, resolve(child)]));
+  };
+  return resolve(value);
+}
 
 test('business domains own separate tables and least-privilege Lambda access', () => {
   assert.ok(resources.EventsFunction, 'Events microservice must be defined');
@@ -63,10 +83,58 @@ test('domain configuration maps development, testing and production without fabr
   assert.deepEqual(template.Parameters.Stage.AllowedValues, ['dev', 'test', 'prod']);
   assert.equal(template.Mappings.Environments.dev.DomainName, 'saldoevento-dev.lynxpardelle.com');
   assert.equal(template.Mappings.Environments.test.DomainName, 'saldoevento-test.lynxpardelle.com');
-  assert.equal(template.Mappings.Environments.prod.DomainName, 'saldoevento.lynxpardelle.com');
+  assert.equal(template.Mappings.Environments.prod.DomainName, 'saldoevento.zooberiahsystems.com');
   assert.equal(resources.FrontendDnsA.Condition, 'CustomDomainEnabled');
   assert.equal(template.Parameters.HostedZoneId.Default, '');
   assert.equal(template.Parameters.CertificateArn.Default, '');
+});
+
+test('production serves the new and existing hosts with compatible OAuth and CSV uploads', () => {
+  const primary = 'saldoevento.zooberiahsystems.com';
+  const legacy = 'saldoevento.lynxpardelle.com';
+  assert.deepEqual(domainValue(resources.FrontendDistribution.Properties.DistributionConfig.Aliases, 'prod'), [primary, legacy]);
+  const origins = [`https://${primary}`, `https://${legacy}`];
+  assert.deepEqual(domainValue(resources.UserPoolClient.Properties.CallbackURLs, 'prod'), origins.map(origin => `${origin}/auth/callback`));
+  assert.deepEqual(domainValue(resources.UserPoolClient.Properties.LogoutURLs, 'prod'), origins);
+  assert.deepEqual(domainValue(resources.BusinessApi.Properties.CorsConfiguration.AllowOrigins, 'prod'), origins);
+  assert.deepEqual(domainValue(resources.ImportsBucket.Properties.CorsConfiguration.CorsRules[0].AllowedOrigins, 'prod'), origins);
+  const hosts = domainValue(resources.FrontendFunction.Properties.Environment.Variables.NG_ALLOWED_HOSTS, 'prod').split(',');
+  assert.ok(hosts.includes(primary) && hosts.includes(legacy));
+  assert.deepEqual(resources.UserPool.Properties.UserPoolName, { 'Fn::Sub': 'saldoevento-${Stage}' });
+  assert.deepEqual(resources.UserPoolDomain.Properties.Domain, { 'Fn::Sub': 'saldoevento-${Stage}-${AWS::AccountId}' });
+  assert.deepEqual(resources.UserPoolClient.Properties.UserPoolId, { Ref: 'UserPool' });
+});
+
+test('existing DNS logical IDs retain their old production name and zone while new records use the new zone', async () => {
+  for (const [oldName, newName, type] of [['FrontendDnsA', 'PrimaryFrontendDnsA', 'A'], ['FrontendDnsAAAA', 'PrimaryFrontendDnsAAAA', 'AAAA']]) {
+    assert.equal(domainValue(resources[oldName].Properties.Name, 'prod'), 'saldoevento.lynxpardelle.com');
+    assert.equal(domainValue(resources[oldName].Properties.HostedZoneId, 'prod'), 'Z05088763QG63CC5SE7PN');
+    assert.ok(resources[newName], `The new ${type} record must have its own logical ID`);
+    assert.equal(resources[newName].Condition, 'ProdCustomDomain');
+    assert.equal(domainValue({ Condition: resources[newName].Condition }, 'prod'), true);
+    assert.equal(domainValue({ Condition: resources[newName].Condition }, 'test'), false);
+    assert.equal(domainValue({ Condition: resources[newName].Condition }, 'prod', false), false);
+    assert.equal(resources[newName].Properties.Type, type);
+    assert.equal(domainValue(resources[newName].Properties.Name, 'prod'), 'saldoevento.zooberiahsystems.com');
+    assert.equal(domainValue(resources[newName].Properties.HostedZoneId, 'prod'), 'Z00733952JM7567FL6HXC');
+    assert.deepEqual(resources[newName].Properties.AliasTarget, resources[oldName].Properties.AliasTarget);
+  }
+  const parameters = Object.fromEntries(JSON.parse(await readFile(new URL('./environments/prod.json', import.meta.url), 'utf8')).map(item => [item.ParameterKey, item.ParameterValue]));
+  assert.equal(parameters.PublicOrigin, 'https://saldoevento.zooberiahsystems.com');
+  assert.equal(parameters.HostedZoneId, 'Z00733952JM7567FL6HXC');
+});
+
+test('development and testing never inherit the production compatibility host', () => {
+  for (const stage of ['dev', 'test']) {
+    const host = `saldoevento-${stage}.lynxpardelle.com`, origin = `https://${host}`;
+    assert.deepEqual(domainValue(resources.FrontendDistribution.Properties.DistributionConfig.Aliases, stage), [host]);
+    assert.deepEqual(domainValue(resources.UserPoolClient.Properties.CallbackURLs, stage), [`${origin}/auth/callback`]);
+    assert.deepEqual(domainValue(resources.UserPoolClient.Properties.LogoutURLs, stage), [origin]);
+    assert.deepEqual(domainValue(resources.BusinessApi.Properties.CorsConfiguration.AllowOrigins, stage), [origin]);
+    assert.deepEqual(domainValue(resources.ImportsBucket.Properties.CorsConfiguration.CorsRules[0].AllowedOrigins, stage), [origin]);
+    assert.equal(domainValue(resources.FrontendDnsA.Properties.Name, stage), host);
+    assert.equal(domainValue(resources.FrontendDnsA.Properties.HostedZoneId, stage), 'Z05088763QG63CC5SE7PN');
+  }
 });
 
 test('self-registration provisions server-owned membership with source-scoped Cognito triggers', () => {

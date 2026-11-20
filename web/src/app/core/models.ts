@@ -1,4 +1,4 @@
-export interface EventRecord { eventId: string; name: string; currency: string; }
+export interface EventRecord { eventId: string; name: string; currency: string; revision?: number; archivedAt?: string; archiveClosureId?: string; reopening?: unknown; }
 export interface Participant { participantId: string; name: string; reference: string; agreedMinor: string; }
 export interface ImportRow {
   rowId: string; provider: string; movementId?: string; movement_id?: string;
